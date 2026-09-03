@@ -1,0 +1,45 @@
+# Environment variables & secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+
+# Databases & SQLite
+*.db
+*.sqlite3
+*.sqlite
+poly.db
+
+# Dependencies
+node_modules/
+backend/venv/
+backend/env/
+venv/
+env/
+ENV/
+
+# Build & Cache outputs
+.next/
+out/
+build/
+dist/
+.turbo/
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Operating System & IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
