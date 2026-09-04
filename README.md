@@ -92,6 +92,7 @@ poly/
 ├── README.md                 # Primary documentation
 ├── brain.md                  # Brain Architecture & Decision Matrix
 ├── agent.md                  # Poly Agent Persona & Human Handoff Architecture
+├── design.md                 # Visual Design System & UX Architecture
 │
 ├── backend/                  # FastAPI Backend Application
 │   ├── app/
@@ -121,6 +122,7 @@ poly/
     ├── architecture.md       # Master System Architecture
     ├── brain.md              # Brain Intelligence Specification
     ├── agent.md              # Poly Voice Agent Specification
+    ├── design.md             # Visual Design System Specification
     ├── agora-architecture.md # Agora WebRTC Handoff Architecture
     └── gemini-agent.md       # Gemini 2.5 Flash Setup & Prompt Guidelines
 ```
@@ -202,6 +204,7 @@ app/tests/test_gemini_live.py ....                              [100%]
 ## 📚 Deep-Dive Documentation
 
 For exhaustive technical specifications, read the documentation files:
+- 🎨 [Visual Design System (`design.md`)](design.md): Official brand colors, typography scale, component specs, and animations.
 - 🧠 [Brain Architecture (`brain.md`)](brain.md): State management schema, signal weights, decision matrix, and conflict resolution.
 - 🤖 [Agent Architecture (`agent.md`)](agent.md): Poly prompt persona, Hinglish code-switching, and sub-50ms handoff.
 - 📐 [Master System Architecture (`docs/architecture.md`)](docs/architecture.md): High-level system diagram and core stack responsibilities.
