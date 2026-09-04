@@ -5,10 +5,10 @@ from typing import Dict, Any, List, Optional
 from app.core.config import settings
 from app.services.safety_layer import SafetyLayer
 from app.services.confidence_engine import ConfidenceEngine, DecisionState
+from app.services.question_planner import QuestionPlanner
 
 logger = logging.getLogger(__name__)
 
-# System persona instruction for Poly Agent
 POLY_SYSTEM_INSTRUCTION = """
 You are POLY, an empathetic, calm, and concise multilingual AI customer-assistance voice agent.
 Your mission is to help callers resolve customer support issues in Hindi, English, or Hinglish (Hindi + English code-switching).
@@ -27,9 +27,9 @@ class PolyAgent:
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
         self.client = None
-        self.model_name = "gemini-2.5-flash" # Current standard Gemini Live Flash model
+        self.model_name = settings.GEMINI_LIVE_MODEL or "gemini-2.5-flash"
         
-        if self.api_key:
+        if self.api_key and self.api_key != "mock_gemini_api_key":
             try:
                 from google import genai
                 self.client = genai.Client(api_key=self.api_key)
@@ -41,6 +41,9 @@ class PolyAgent:
         """Creates clean structured conversation state for a new session."""
         return {
             "session_id": session_id,
+            "agora_channel": f"poly-{session_id}",
+            "controller": "AI", # "AI" or "HUMAN"
+            "ai_yielded": False,
             "language": ["hi-IN", "en-US"],
             "active_language": "Hindi + English",
             "intent": None,
@@ -52,7 +55,7 @@ class PolyAgent:
                 {"key": "customer_name", "label": "Customer Name", "value": caller_name, "status": "confirmed"}
             ],
             "uncertain_information": [],
-            "missing_information": ["customer_id", "reference_number", "issue_category"],
+            "missing_information": ["reference_number", "customer_id", "issue_category"],
             "clarification_attempts": 0,
             "escalation_required": False,
             "escalation_reason": None,
@@ -62,13 +65,25 @@ class PolyAgent:
     def process_turn(self, state: Dict[str, Any], caller_input: str) -> Dict[str, Any]:
         """
         Processes a conversation turn:
+        0. Check AI Yield Controller Lock (If controller == HUMAN, yield speech completely)
         1. Safety Layer evaluation
         2. Language detection (Hindi / English / Hinglish)
-        3. Information Extraction
+        3. Information Extraction & Contradiction Detection
         4. Confidence Engine evaluation
-        5. Gemini LLM response synthesis
-        6. State update
+        5. Question Prioritization Engine
+        6. Gemini LLM / Intelligent Response Synthesis
         """
+        # 0. AI Yield Control Lock Check
+        if state.get("controller") == "HUMAN" or state.get("ai_yielded"):
+            state["ai_yielded"] = True
+            return {
+                "response_text": None,
+                "response_audio_url": None,
+                "state": state,
+                "action": "YIELDED",
+                "message": "AI controller yielded to Human Support Specialist."
+            }
+
         # 1. Safety Layer Check
         safety_result = SafetyLayer.evaluate(caller_input)
         if not safety_result["is_safe"]:
@@ -84,7 +99,10 @@ class PolyAgent:
 
         # 2. Language Detection
         detected_language = self._detect_language(caller_input)
-        state["active_language"] = detected_language
+        if state.get("active_language") in ["Hindi", "Hindi + English"] and detected_language in ["Hindi", "English"]:
+            state["active_language"] = "Hindi + English"
+        else:
+            state["active_language"] = detected_language
 
         # 3. Information Extraction & Conflict Check
         extracted = self._extract_entities(caller_input)
@@ -106,10 +124,13 @@ class PolyAgent:
                 "confidence": confidence_result
             }
 
-        # 5. Generate Response via Gemini or Intelligent Engine
-        response_text = self._generate_response(state, caller_input, decision)
+        # 5. Question Prioritization
+        next_question_field = QuestionPlanner.get_next_question_field(state)
 
-        # 6. Update Summary narrative
+        # 6. Generate Response via Gemini or Intelligent Engine
+        response_text = self._generate_response(state, caller_input, decision, next_question_field)
+
+        # Update Summary narrative
         state["summary"] = f"Caller discussed '{state.get('issue') or 'account assistance'}'. Detected language: {detected_language}."
 
         return {
@@ -117,14 +138,15 @@ class PolyAgent:
             "response_audio_url": None,
             "state": state,
             "action": decision,
-            "confidence": confidence_result
+            "confidence": confidence_result,
+            "next_field": next_question_field
         }
 
     def _detect_language(self, text: str) -> str:
         text_lower = text.lower()
-        hindi_indicators = ["mera", "hai", "nahi", "ho", "raha", "haan", "par", "ko", "par", "par", "kya", "aap"]
+        hindi_indicators = ["mera", "hai", "nahi", "ho", "raha", "haan", "par", "ko", "kya", "aap", "namaste", "aaya", "chahiye"]
         has_hindi = any(re.search(r'\b' + kw + r'\b', text_lower) for kw in hindi_indicators)
-        has_english = any(kw in text_lower for kw in ["account", "problem", "access", "reset", "password", "ticket", "reference"])
+        has_english = any(kw in text_lower for kw in ["account", "problem", "access", "reset", "password", "ticket", "reference", "order", "number"])
 
         if has_hindi and has_english:
             return "Hindi + English"
@@ -154,8 +176,6 @@ class PolyAgent:
         if "issue" in extracted:
             state["issue"] = extracted["issue"]
             state["intent"] = "account_assistance"
-            if "issue_category" in state["missing_information"]:
-                state["missing_information"].remove("issue_category")
 
         if "numbers" in extracted:
             numbers = extracted["numbers"]
@@ -164,7 +184,7 @@ class PolyAgent:
                 if not state["reference_number"]:
                     state["reference_number"] = num
                 elif state["reference_number"] != num:
-                    # Conflict!
+                    # Contradiction detected!
                     state["uncertain_information"].append({
                         "key": "reference_number",
                         "label": "Reference Number",
@@ -183,7 +203,7 @@ class PolyAgent:
                 })
                 state["clarification_attempts"] += 1
 
-        # Check for confirmation responses
+        # Check for explicit user confirmation
         if any(w in text_lower for w in ["yes", "haan", "correct", "sahi hai", "that is right", "right"]):
             if state["reference_number"] and not any(f["key"] == "reference_number" for f in state["confirmed_information"]):
                 state["confirmed_information"].append({
@@ -192,15 +212,22 @@ class PolyAgent:
                     "value": state["reference_number"],
                     "status": "confirmed"
                 })
-                if "reference_number" in state["missing_information"]:
-                    state["missing_information"].remove("reference_number")
 
-    def _generate_response(self, state: Dict[str, Any], caller_input: str, decision: str) -> str:
+    def _generate_response(
+        self, state: Dict[str, Any], caller_input: str, decision: str, next_field: Optional[Dict[str, Any]]
+    ) -> str:
         """Generates response via Gemini Client or intelligent conversational synthesis."""
         if self.client:
             try:
                 from google.genai import types
-                prompt = f"{POLY_SYSTEM_INSTRUCTION}\n\nCurrent State: {json.dumps(state)}\nDecision: {decision}\nCaller said: \"{caller_input}\"\n\nRespond as Poly:"
+                prompt = (
+                    f"{POLY_SYSTEM_INSTRUCTION}\n\n"
+                    f"Current State: {json.dumps(state)}\n"
+                    f"Decision: {decision}\n"
+                    f"Target Field To Ask: {json.dumps(next_field) if next_field else 'None'}\n"
+                    f"Caller said: \"{caller_input}\"\n\n"
+                    f"Respond as Poly:"
+                )
                 response = self.client.models.generate_content(
                     model=self.model_name,
                     contents=prompt,
@@ -211,7 +238,7 @@ class PolyAgent:
             except Exception as e:
                 logger.error(f"Gemini API invocation error: {e}")
 
-        # Deterministic Conversational Synthesis Fallback
+        # Deterministic Conversational Synthesis
         if decision == DecisionState.CONFIRM and state.get("reference_number"):
             return f"I heard your reference number as {state['reference_number']}. Is that correct?"
         
@@ -219,6 +246,10 @@ class PolyAgent:
             if state.get("uncertain_information"):
                 return "Did you mean reference number 4281 or 4289 for this reset ticket?"
             return "Got it. Could you give me your ticket reference number?"
+
+        if next_field:
+            field_name = next_field.get("label", "reference number")
+            return f"Could you please share your {field_name} so I can look up your account?"
 
         if state.get("active_language") == "Hindi + English":
             return "Sure, I can help with your account. Do you have your ticket reference number?"

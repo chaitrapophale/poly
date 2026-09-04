@@ -1,8 +1,11 @@
 import uuid
+import logging
 from typing import Dict, Any, Optional
 from app.agents.poly_agent import poly_agent
 from app.database.session import SessionLocal
-from app.models.all_models import Case, Conversation, Message, ExtractedInformation, CaseStatus
+from app.models.all_models import Case, Conversation, Message, ExtractedInformation, CaseStatus, Escalation, AuditEvent
+
+logger = logging.getLogger(__name__)
 
 class PolySession:
     def __init__(self, session_id: str, caller_name: str = "Aarav Patel"):
@@ -21,7 +24,18 @@ class PolySession:
         ]
 
     def interact(self, text: str) -> Dict[str, Any]:
-        """Processes caller voice/text turn and updates session state and transcript."""
+        """Processes caller turn and updates session state and transcript."""
+        # 0. Check AI Yield Controller Lock
+        if self.state.get("controller") == "HUMAN":
+            return {
+                "session_id": self.session_id,
+                "agora_channel": self.agora_channel,
+                "response_text": None,
+                "action": "YIELDED",
+                "state": self.state,
+                "transcript": self.transcript
+            }
+
         turn_id = f"t-{len(self.transcript) + 1}"
         
         # Record caller turn
@@ -35,20 +49,21 @@ class PolySession:
             "language": self.state["active_language"]
         })
 
-        # Poly Agent processing turn
+        # Poly Agent turn processing
         agent_result = poly_agent.process_turn(self.state, text)
-        response_text = agent_result["response_text"]
+        response_text = agent_result.get("response_text")
 
-        # Record Poly response turn
-        poly_turn_id = f"t-{len(self.transcript) + 1}"
-        self.transcript.append({
-            "id": poly_turn_id,
-            "speaker": "poly",
-            "name": "POLY Assistant",
-            "timestamp": "00:20",
-            "originalText": response_text,
-            "translatedText": response_text
-        })
+        # Record Poly response turn if not yielded
+        if response_text:
+            poly_turn_id = f"t-{len(self.transcript) + 1}"
+            self.transcript.append({
+                "id": poly_turn_id,
+                "speaker": "poly",
+                "name": "POLY Assistant",
+                "timestamp": "00:20",
+                "originalText": response_text,
+                "translatedText": response_text
+            })
 
         # If escalation was triggered, persist case to database
         if self.state["escalation_required"]:
@@ -58,16 +73,29 @@ class PolySession:
             "session_id": self.session_id,
             "agora_channel": self.agora_channel,
             "response_text": response_text,
-            "action": agent_result["action"],
+            "action": agent_result.get("action"),
             "state": self.state,
             "transcript": self.transcript
         }
 
+    def yield_control_to_human(self, agent_name: str = "Priya Sharma"):
+        """Locks AI speech controller and yields conversation control to human specialist."""
+        self.state["controller"] = "HUMAN"
+        self.state["ai_yielded"] = True
+        self.state["assigned_agent"] = agent_name
+
     def _persist_escalated_case(self):
-        """Persists case to database upon escalation."""
+        """Persists case, escalation, and audit events to database upon escalation."""
         db = SessionLocal()
         try:
-            case_number = f"POLY-{1024 + db.query(Case).count()}"
+            # Check if case already exists for this session to prevent duplicate creation
+            existing = db.query(Case).filter(Case.case_number == f"POLY-{self.session_id}").first()
+            if existing:
+                return existing
+
+            count = db.query(Case).count()
+            case_number = f"POLY-{1024 + count}"
+
             db_case = Case(
                 case_number=case_number,
                 language=self.state["active_language"],
@@ -81,31 +109,45 @@ class PolySession:
             db.commit()
             db.refresh(db_case)
 
+            # Create Escalation queue item
+            db.add(Escalation(
+                case_id=db_case.id,
+                priority="PRIORITY",
+                routing_node="APAC-Central (Mumbai Edge)",
+                status="PENDING"
+            ))
+
+            # Audit events
+            db.add(AuditEvent(case_id=db_case.id, event_type="CALL_STARTED", title="Caller Session Started", description="Connected via Agora RTC", timestamp_offset="00:00"))
+            db.add(AuditEvent(case_id=db_case.id, event_type="ESCALATION_TRIGGERED", title="Confidence Engine Escalation", description=db_case.escalation_reason, timestamp_offset="00:45"))
+            db.add(AuditEvent(case_id=db_case.id, event_type="CASE_CREATED", title=f"Case {case_number} Created", description="Status: WAITING_FOR_HUMAN", timestamp_offset="01:00"))
+
             # Persist extracted fields
             for item in self.state.get("confirmed_information", []):
-                field = ExtractedInformation(
+                db.add(ExtractedInformation(
                     case_id=db_case.id,
-                    field_key=item["key"],
-                    field_label=item["label"],
-                    field_value=item["value"],
+                    field_key=item.get("key", "info"),
+                    field_label=item.get("label", "Field"),
+                    field_value=item.get("value", "Confirmed"),
                     status="confirmed"
-                )
-                db.add(field)
+                ))
 
             for item in self.state.get("uncertain_information", []):
-                field = ExtractedInformation(
+                db.add(ExtractedInformation(
                     case_id=db_case.id,
-                    field_key=item["key"],
-                    field_label=item["label"],
-                    field_value=item["value"],
+                    field_key=item.get("key", "info"),
+                    field_label=item.get("label", "Field"),
+                    field_value=item.get("value", "Uncertain"),
                     status="uncertain",
                     notes=item.get("notes")
-                )
-                db.add(field)
+                ))
 
             db.commit()
+            logger.info(f"Persisted escalated case {case_number} for session {self.session_id}")
+            return db_case
         except Exception as e:
             db.rollback()
+            logger.error(f"Error persisting escalated case: {e}")
         finally:
             db.close()
 
