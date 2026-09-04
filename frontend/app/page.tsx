@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Header } from '../components/Header';
+import { PolyHero3D } from '../components/landing/PolyHero3D';
 
 export default function LandingPage() {
   const [activeDecision, setActiveDecision] = useState<'CONTINUE' | 'CLARIFY' | 'CONFIRM' | 'ESCALATE'>('CONFIRM');
@@ -56,27 +57,27 @@ export default function LandingPage() {
       <main className="flex-1 w-full max-w-7xl mx-auto px-6 md:px-12 pt-12 pb-24">
         
         {/* ================================================== */}
-        {/* HERO SECTION                                       */}
+        {/* HERO SECTION WITH 3D ANIMATION                      */}
         {/* ================================================== */}
-        <section className="pt-6 pb-20 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        <section className="pt-4 pb-16 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           
           {/* Left Text Column */}
-          <div className="lg:col-span-7 flex flex-col items-start text-left">
+          <div className="lg:col-span-6 flex flex-col items-start text-left z-10">
             
-            {/* Subtle Voice Engine Badge */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#38607A]/10 border border-[#38607A]/20 text-[#38607A] text-xs font-semibold mb-6">
+            {/* Eyebrow Badge */}
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#38607A]/10 border border-[#38607A]/20 text-[#38607A] text-xs font-bold uppercase tracking-wider mb-6">
               <span className="w-2 h-2 rounded-full bg-[#38607A] animate-pulse"></span>
-              <span>Real-Time Voice Assistance Engine</span>
+              <span>REAL-TIME MULTILINGUAL ASSISTANCE</span>
             </div>
 
             {/* Main Headline */}
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-[#263845] leading-[1.15] tracking-tight mb-6">
-              Get help. <br className="hidden sm:inline" />
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-[#263845] leading-[1.12] tracking-tight mb-6">
+              Get help. <br />
               <span className="text-[#38607A]">In your language.</span>
             </h1>
 
             {/* Supporting Headline */}
-            <h2 className="text-lg md:text-xl font-semibold text-[#69577E] leading-relaxed mb-4 max-w-2xl">
+            <h2 className="text-lg md:text-xl font-semibold text-[#69577E] leading-relaxed mb-4 max-w-xl">
               Real-time voice assistance that understands you, even when the conversation gets complicated.
             </h2>
 
@@ -101,7 +102,7 @@ export default function LandingPage() {
                 href="#how-it-works"
                 className="px-8 py-4 rounded-full border border-[#BFC9D0] text-[#263845] font-semibold text-base hover:bg-[#BFC9D0]/20 transition-all flex items-center justify-center gap-2"
               >
-                <span>See How POLY Works</span>
+                <span>See How It Works</span>
                 <span className="material-symbols-outlined text-[18px]">
                   south
                 </span>
@@ -115,51 +116,12 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Right Visual Column (Voice Sphere & Conversation Preview) */}
-          <div className="lg:col-span-5 flex flex-col items-center justify-center relative">
+          {/* Right Visual Column (3D Interactive WebGL Hero Visual) */}
+          <div className="lg:col-span-6 flex flex-col items-center justify-center relative w-full gap-4">
             
-            {/* Main Interactive Voice Visual Sphere Container */}
-            <div className="relative w-full max-w-md aspect-square bg-[#FFF8F5] rounded-3xl border border-[#BFC9D0]/40 p-8 flex flex-col items-center justify-center shadow-sm overflow-hidden">
-              
-              {/* Soft Concentric Wave Animations */}
-              <div className="absolute w-72 h-72 rounded-full border border-[#38607A]/20 animate-wave-expand pointer-events-none"></div>
-              <div className="absolute w-72 h-72 rounded-full border border-[#69577E]/20 animate-wave-expand-delayed pointer-events-none"></div>
-              <div className="absolute w-56 h-56 rounded-full bg-[#38607A]/5 blur-xl pointer-events-none"></div>
-
-              {/* Center Soft Circular Voice Sphere */}
-              <div className="relative z-10 w-40 h-40 rounded-full bg-gradient-to-br from-[#38607A] via-[#69577E] to-[#38607A] p-1 shadow-md animate-calm-pulse flex items-center justify-center">
-                <div className="w-full h-full rounded-full bg-[#FFF8F5]/90 backdrop-blur-sm flex flex-col items-center justify-center p-4">
-                  
-                  {/* Subtle Waveform Animation Bars */}
-                  <div className="flex items-center gap-1.5 h-8 mb-2">
-                    <span className="w-1.5 bg-[#38607A] rounded-full animate-bounce h-4"></span>
-                    <span className="w-1.5 bg-[#69577E] rounded-full animate-bounce [animation-delay:0.15s] h-7"></span>
-                    <span className="w-1.5 bg-[#38607A] rounded-full animate-bounce [animation-delay:0.3s] h-5"></span>
-                    <span className="w-1.5 bg-[#7E4F50] rounded-full animate-bounce [animation-delay:0.45s] h-8"></span>
-                    <span className="w-1.5 bg-[#69577E] rounded-full animate-bounce [animation-delay:0.2s] h-5"></span>
-                  </div>
-
-                  <span className="text-[11px] font-bold tracking-wider text-[#263845] uppercase">
-                    Listening
-                  </span>
-                </div>
-              </div>
-
-              {/* Floating Context Badges around Sphere */}
-              <div className="absolute top-6 left-6 px-3 py-1 rounded-full bg-[#FFF8F5] border border-[#BFC9D0] text-[#38607A] text-xs font-bold shadow-xs animate-float-gentle">
-                Hindi
-              </div>
-              <div className="absolute top-10 right-6 px-3 py-1 rounded-full bg-[#FFF8F5] border border-[#BFC9D0] text-[#69577E] text-xs font-bold shadow-xs animate-float-gentle [animation-delay:1s]">
-                Hinglish
-              </div>
-              <div className="absolute bottom-16 left-6 px-3 py-1 rounded-full bg-[#FFF8F5] border border-[#38607A]/40 text-[#38607A] text-xs font-bold shadow-xs flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                <span>Confirmed</span>
-              </div>
-              <div className="absolute bottom-10 right-6 px-3 py-1 rounded-full bg-[#FFF8F5] border border-[#7E4F50]/40 text-[#7E4F50] text-xs font-bold shadow-xs flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">person</span>
-                <span>Human ready</span>
-              </div>
+            {/* 3D WebGL Conversation Intelligence Component */}
+            <div className="w-full bg-[#FFF8F5] rounded-3xl border border-[#BFC9D0]/50 shadow-sm relative overflow-hidden">
+              <PolyHero3D />
             </div>
 
             {/* Compact Real-Time Conversation Preview */}
