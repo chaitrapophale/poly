@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 
 interface HeaderProps {
@@ -9,6 +9,7 @@ interface HeaderProps {
   title?: string;
   activeLanguage?: string;
   isConnected?: boolean;
+  isLandingPage?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -16,63 +17,176 @@ export const Header: React.FC<HeaderProps> = ({
   backHref = '/',
   title,
   activeLanguage = 'Hindi + English',
-  isConnected = true
+  isConnected = true,
+  isLandingPage = false
 }) => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <header className="fixed top-0 w-full z-50 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.03)] pt-safe">
-      <div className="h-16 px-4 md:px-12 flex items-center justify-between">
+    <header className="sticky top-0 z-50 w-full bg-[#FFF8F5]/90 backdrop-blur-md border-b border-[#BFC9D0]/30 transition-all">
+      <div className="max-w-7xl mx-auto h-20 px-6 md:px-12 flex items-center justify-between">
+        
+        {/* Left: Brand Logo */}
         <div className="flex items-center gap-3">
           {showBack && (
             <Link
               href={backHref}
-              className="w-10 h-10 -ml-2 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-[#263845] hover:bg-[#BFC9D0]/20 transition-colors"
+              aria-label="Back"
             >
               <span className="material-symbols-outlined text-[20px]">arrow_back</span>
             </Link>
           )}
 
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center text-on-primary font-bold text-lg shadow-sm">
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="w-9 h-9 rounded-xl bg-[#38607A] flex items-center justify-center text-[#FFF8F5] font-bold text-lg shadow-sm transition-transform group-hover:scale-105">
               P
             </div>
-            <span className="font-bold text-xl tracking-tight text-on-surface">POLY</span>
+            <div className="flex flex-col">
+              <span className="font-extrabold text-2xl tracking-tight text-[#263845] font-jakarta leading-none">
+                POLY
+              </span>
+              <span className="text-[10px] font-semibold tracking-wider text-[#69577E] uppercase mt-0.5">
+                Voice AI
+              </span>
+            </div>
           </Link>
 
           {title && (
-            <span className="font-title-md text-title-md text-on-surface truncate ml-2 hidden sm:inline-block">
+            <span className="font-semibold text-sm text-[#263845] truncate ml-3 hidden sm:inline-block border-l border-[#BFC9D0]/40 pl-3">
               {title}
             </span>
           )}
+        </div>
 
-          {!title && isConnected && (
-            <div className="flex items-center gap-1.5 ml-2">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-              <span className="font-label-sm text-label-sm text-on-surface-variant font-medium">
-                Connected
+        {/* Center: Navigation Links (Landing Page) */}
+        {isLandingPage ? (
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-[#263845]">
+            <a href="#how-it-works" className="hover:text-[#38607A] transition-colors">
+              How it works
+            </a>
+            <a href="#for-callers" className="hover:text-[#38607A] transition-colors">
+              For callers
+            </a>
+            <a href="#for-support-teams" className="hover:text-[#38607A] transition-colors">
+              For support teams
+            </a>
+            <a href="#safety" className="hover:text-[#38607A] transition-colors">
+              Safety
+            </a>
+          </nav>
+        ) : (
+          !title && isConnected && (
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#38607A]/10 border border-[#38607A]/20">
+              <span className="w-2 h-2 rounded-full bg-[#38607A] animate-ping"></span>
+              <span className="text-xs font-semibold text-[#38607A]">
+                Agora Real-Time Ready
               </span>
             </div>
+          )
+        )}
+
+        {/* Right: CTAs */}
+        <div className="flex items-center gap-3">
+          {isLandingPage ? (
+            <>
+              <Link
+                href="/agent/cases"
+                className="hidden sm:inline-flex px-4 py-2 text-xs font-semibold text-[#263845] bg-transparent hover:bg-[#BFC9D0]/20 rounded-full transition-colors border border-[#BFC9D0]/50"
+              >
+                Agent Login
+              </Link>
+              <Link
+                href="/before-call"
+                className="px-5 py-2.5 text-xs font-bold text-[#FFF8F5] bg-[#38607A] hover:bg-[#263845] rounded-full transition-all shadow-sm hover:shadow flex items-center gap-2"
+              >
+                <span>Start a Call</span>
+                <span className="material-symbols-outlined text-[16px]">call</span>
+              </Link>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="px-3.5 py-1.5 rounded-full bg-[#38607A]/10 text-[#38607A] text-xs font-semibold flex items-center gap-1.5 border border-[#38607A]/20"
+              >
+                <span className="material-symbols-outlined text-[16px]">translate</span>
+                <span>{activeLanguage}</span>
+              </button>
+              <Link
+                href="/agent/cases"
+                className="px-4 py-2 rounded-full bg-[#38607A] text-[#FFF8F5] text-xs font-semibold flex items-center gap-1.5 hover:bg-[#263845] transition-colors shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px]">support_agent</span>
+                <span className="hidden sm:inline">Agent Portal</span>
+              </Link>
+            </>
+          )}
+
+          {/* Mobile menu toggle button */}
+          {isLandingPage && (
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 text-[#263845] hover:bg-[#BFC9D0]/20 rounded-lg"
+              aria-label="Toggle Menu"
+            >
+              <span className="material-symbols-outlined text-[24px]">
+                {mobileMenuOpen ? 'close' : 'menu'}
+              </span>
+            </button>
           )}
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="min-h-[38px] px-3.5 py-1 rounded-full bg-surface-container-low text-on-surface-variant flex items-center gap-1.5 hover:bg-surface-container transition-colors shadow-sm"
-          >
-            <span className="material-symbols-outlined text-[16px] text-primary">translate</span>
-            <span className="font-label-sm text-label-sm font-medium">{activeLanguage}</span>
-          </button>
-
-          <Link
-            href="/agent/login"
-            className="h-9 px-3 rounded-full bg-primary text-on-primary font-label-sm text-label-sm flex items-center gap-1.5 hover:bg-primary-container transition-colors shadow-sm"
-            title="Agent Support Portal"
-          >
-            <span className="material-symbols-outlined text-[16px]">support_agent</span>
-            <span className="hidden sm:inline font-semibold">Agent Portal</span>
-          </Link>
-        </div>
       </div>
+
+      {/* Mobile Drawer */}
+      {isLandingPage && mobileMenuOpen && (
+        <div className="md:hidden bg-[#FFF8F5] border-b border-[#BFC9D0]/40 px-6 py-6 flex flex-col gap-4 text-sm font-semibold text-[#263845] shadow-lg animate-fadeIn">
+          <a
+            href="#how-it-works"
+            onClick={() => setMobileMenuOpen(false)}
+            className="py-2 border-b border-[#BFC9D0]/20"
+          >
+            How it works
+          </a>
+          <a
+            href="#for-callers"
+            onClick={() => setMobileMenuOpen(false)}
+            className="py-2 border-b border-[#BFC9D0]/20"
+          >
+            For callers
+          </a>
+          <a
+            href="#for-support-teams"
+            onClick={() => setMobileMenuOpen(false)}
+            className="py-2 border-b border-[#BFC9D0]/20"
+          >
+            For support teams
+          </a>
+          <a
+            href="#safety"
+            onClick={() => setMobileMenuOpen(false)}
+            className="py-2 border-b border-[#BFC9D0]/20"
+          >
+            Safety
+          </a>
+          <div className="flex flex-col gap-3 pt-2">
+            <Link
+              href="/agent/cases"
+              onClick={() => setMobileMenuOpen(false)}
+              className="w-full text-center py-2.5 rounded-full border border-[#BFC9D0] text-[#263845]"
+            >
+              Agent Login
+            </Link>
+            <Link
+              href="/before-call"
+              onClick={() => setMobileMenuOpen(false)}
+              className="w-full text-center py-2.5 rounded-full bg-[#38607A] text-[#FFF8F5] font-bold"
+            >
+              Start a Call
+            </Link>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
