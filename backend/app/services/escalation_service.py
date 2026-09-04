@@ -11,9 +11,7 @@ logger = logging.getLogger(__name__)
 class EscalationService:
     @staticmethod
     def create_handoff_package(state: Dict[str, Any], transcript: List[Dict[str, Any]], reason: str) -> Dict[str, Any]:
-        """
-        Generates structured handoff package for Support Specialist view.
-        """
+        """Generates structured handoff package for Support Specialist view."""
         return {
             "case_number": state.get("case_number", "POLY-1024"),
             "customer_name": state.get("customer_name", "Aarav Patel"),
@@ -41,9 +39,7 @@ class EscalationService:
         summary: str,
         priority: str = "PRIORITY"
     ) -> Dict[str, Any]:
-        """
-        Creates persistent case, escalation queue item, and system audit events in database.
-        """
+        """Creates persistent case, escalation queue item, and system audit events in database."""
         db = SessionLocal()
         try:
             count = db.query(Case).count()
@@ -118,13 +114,25 @@ class EscalationService:
     @staticmethod
     def accept_handoff(case_id: str, agent_name: str = "Priya Sharma") -> Dict[str, Any]:
         """
-        Support agent accepts handoff: assigns case, updates status to ASSIGNED -> HUMAN_CONNECTED, and records audit event.
+        Support agent accepts handoff:
+        1. Atomic duplicate acceptance validation.
+        2. Assigns case, updates status to IN_PROGRESS.
+        3. Records HUMAN_CONNECTED and AI_YIELDED audit events.
         """
         db = SessionLocal()
         try:
-            case = db.query(Case).filter((Case.id == case_id) | (Case.case_number == case_id)).first()
+            raw_id = case_id.replace("case-", "")
+            case = db.query(Case).filter((Case.id == raw_id) | (Case.case_number == case_id)).first()
             if not case:
                 return {"status": "NOT_FOUND", "message": f"Case {case_id} not found."}
+
+            # Atomic race-condition check: Block duplicate acceptance
+            if case.status in [CaseStatus.IN_PROGRESS, CaseStatus.ASSIGNED, CaseStatus.RESOLVED]:
+                assigned_name = case.assigned_agent.full_name if case.assigned_agent else "another specialist"
+                return {
+                    "status": "CONFLICT",
+                    "message": f"Case {case.case_number} has already been accepted by {assigned_name}."
+                }
 
             case.status = CaseStatus.IN_PROGRESS
             
@@ -138,13 +146,13 @@ class EscalationService:
 
             case.agent_id = agent.id
 
-            # Update Escalation Queue item status
+            # Update Escalation Queue status
             esc = db.query(Escalation).filter(Escalation.case_id == case.id).first()
             if esc:
                 esc.status = "ACCEPTED"
                 esc.agent_id = agent.id
 
-            # Audit Event
+            # Audit Events
             db.add(AuditEvent(
                 case_id=case.id,
                 event_type="HUMAN_CONNECTED",
@@ -153,8 +161,22 @@ class EscalationService:
                 timestamp_offset="02:45"
             ))
 
+            db.add(AuditEvent(
+                case_id=case.id,
+                event_type="AI_YIELDED",
+                title="POLY AI Yielded Control",
+                description="POLY AI voice speech disabled; human agent in full control",
+                timestamp_offset="02:46"
+            ))
+
             db.commit()
             logger.info(f"Handoff accepted for case {case.case_number} by agent {agent_name}")
+
+            # Also trigger session controller yield if session_manager holds this active session
+            from app.services.session_manager import session_manager
+            session = session_manager.get(f"session-{case.id}") or session_manager.get("session-8042")
+            if session:
+                session.yield_control_to_human(agent_name)
 
             return {
                 "status": "SUCCESS",
@@ -175,7 +197,8 @@ class EscalationService:
         """Marks case as RESOLVED and records final resolution audit event."""
         db = SessionLocal()
         try:
-            case = db.query(Case).filter((Case.id == case_id) | (Case.case_number == case_id)).first()
+            raw_id = case_id.replace("case-", "")
+            case = db.query(Case).filter((Case.id == raw_id) | (Case.case_number == case_id)).first()
             if not case:
                 return {"status": "NOT_FOUND", "message": f"Case {case_id} not found."}
 
