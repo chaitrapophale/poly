@@ -22,9 +22,14 @@ class Settings(BaseSettings):
     
     # AI Config
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_LIVE_MODEL: str = os.getenv("GEMINI_LIVE_MODEL", "gemini-2.5-flash")
     
+    PORT: int = 8000
+    HOST: str = "0.0.0.0"
+
     class Config:
         case_sensitive = True
+        extra = "ignore"
         env_file = ".env"
 
 settings = Settings()
