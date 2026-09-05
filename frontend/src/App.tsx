@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { AppSplashScreen } from './components/AppSplashScreen';
 import LandingPage from './pages/LandingPage';
 import BeforeCallPage from './pages/BeforeCallPage';
 import CallPage from './pages/CallPage';
@@ -15,21 +16,26 @@ import AgentSettingsPage from './pages/agent/AgentSettingsPage';
 import AgentAnalyticsPage from './pages/agent/AgentAnalyticsPage';
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/before-call" element={<BeforeCallPage />} />
-      <Route path="/call" element={<CallPage />} />
-      <Route path="/escalation" element={<EscalationPage />} />
-      <Route path="/human-connected" element={<HumanConnectedPage />} />
-      <Route path="/agent/dashboard" element={<AgentDashboardPage />} />
-      <Route path="/agent/cases" element={<AgentCasesPage />} />
-      <Route path="/agent/cases/:id" element={<CaseDetailAuditPage />} />
-      <Route path="/agent/conversations" element={<AgentConversationsPage />} />
-      <Route path="/agent/escalation/:id" element={<AgentEscalationDetailPage />} />
-      <Route path="/agent/login" element={<AgentLoginPage />} />
-      <Route path="/agent/settings" element={<AgentSettingsPage />} />
-      <Route path="/agent/analytics" element={<AgentAnalyticsPage />} />
-    </Routes>
+    <>
+      {showSplash && <AppSplashScreen onComplete={() => setShowSplash(false)} />}
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/before-call" element={<BeforeCallPage />} />
+        <Route path="/call" element={<CallPage />} />
+        <Route path="/escalation" element={<EscalationPage />} />
+        <Route path="/human-connected" element={<HumanConnectedPage />} />
+        <Route path="/agent/dashboard" element={<AgentDashboardPage />} />
+        <Route path="/agent/cases" element={<AgentCasesPage />} />
+        <Route path="/agent/cases/:id" element={<CaseDetailAuditPage />} />
+        <Route path="/agent/conversations" element={<AgentConversationsPage />} />
+        <Route path="/agent/escalation/:id" element={<AgentEscalationDetailPage />} />
+        <Route path="/agent/login" element={<AgentLoginPage />} />
+        <Route path="/agent/settings" element={<AgentSettingsPage />} />
+        <Route path="/agent/analytics" element={<AgentAnalyticsPage />} />
+      </Routes>
+    </>
   );
 }
