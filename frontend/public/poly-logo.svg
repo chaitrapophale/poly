@@ -1,0 +1,20 @@
+<svg width="140" height="40" viewBox="0 0 140 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icon Mark -->
+  <rect width="40" height="40" rx="12" fill="url(#poly_grad)"/>
+  <path d="M12 20C12 16 15 13 19 13H21C25 13 28 16 28 20C28 24 25 27 21 27H19C15 27 12 24 12 20Z" stroke="#FFF8F5" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="16" y1="18" x2="16" y2="22" stroke="#FFF8F5" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="20" y1="15" x2="20" y2="25" stroke="#FFF8F5" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="24" y1="17" x2="24" y2="23" stroke="#FFF8F5" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="27" cy="13" r="2.5" fill="#7E4F50"/>
+  
+  <!-- Text Brand Name -->
+  <text x="50" y="24" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-weight="800" font-size="20" fill="#263845" letter-spacing="-0.5">POLY</text>
+  <text x="51" y="34" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-weight="700" font-size="9" fill="#69577E" letter-spacing="1.5">VOICE AI</text>
+
+  <defs>
+    <linearGradient id="poly_grad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38607A"/>
+      <stop offset="1" stop-color="#263845"/>
+    </linearGradient>
+  </defs>
+</svg>

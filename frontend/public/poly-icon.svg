@@ -1,0 +1,17 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="40" height="40" rx="12" fill="url(#poly_grad)"/>
+  <!-- Central Soundwave Polygon -->
+  <path d="M12 20C12 16 15 13 19 13H21C25 13 28 16 28 20C28 24 25 27 21 27H19C15 27 12 24 12 20Z" stroke="#FFF8F5" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Inner Wave Bars -->
+  <line x1="16" y1="18" x2="16" y2="22" stroke="#FFF8F5" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="20" y1="15" x2="20" y2="25" stroke="#FFF8F5" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="24" y1="17" x2="24" y2="23" stroke="#FFF8F5" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Accent Node Point -->
+  <circle cx="27" cy="13" r="2.5" fill="#7E4F50"/>
+  <defs>
+    <linearGradient id="poly_grad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38607A"/>
+      <stop offset="1" stop-color="#263845"/>
+    </linearGradient>
+  </defs>
+</svg>
