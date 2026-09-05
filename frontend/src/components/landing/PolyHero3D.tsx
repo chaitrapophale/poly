@@ -15,9 +15,9 @@ export const PolyHero3D: React.FC = () => {
     // Scene Setup
     const scene = new THREE.Scene();
     
-    // Responsive Camera Setup
-    const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight;
+    // Responsive Camera Setup (with zero-size fallback protection)
+    const width = Math.max(containerRef.current.clientWidth || 1, 1);
+    const height = Math.max(containerRef.current.clientHeight || 1, 1);
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
     camera.position.set(0, 0, 8.5);
 
@@ -25,10 +25,11 @@ export const PolyHero3D: React.FC = () => {
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
       alpha: true,
+      premultipliedAlpha: false,
       antialias: true,
       powerPreference: 'high-performance'
     });
-    renderer.setSize(width, height);
+    renderer.setSize(width, height, false);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     // Lights Setup (POLY Brand Colors)
@@ -168,6 +169,7 @@ export const PolyHero3D: React.FC = () => {
       ctx.fillText((badgeIcon ? badgeIcon + ' ' : '') + text, canvas.width / 2, canvas.height / 2);
 
       const texture = new THREE.CanvasTexture(canvas);
+      texture.generateMipmaps = false;
       texture.minFilter = THREE.LinearFilter;
       const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.95 });
       const sprite = new THREE.Sprite(spriteMat);
@@ -254,21 +256,27 @@ export const PolyHero3D: React.FC = () => {
       if (!containerRef.current || !canvasRef.current) return;
       const newW = containerRef.current.clientWidth;
       const newH = containerRef.current.clientHeight;
-      camera.aspect = newW / newH;
-      camera.updateProjectionMatrix();
-      renderer.setSize(newW, newH);
+      if (newW > 0 && newH > 0) {
+        camera.aspect = newW / newH;
+        camera.updateProjectionMatrix();
+        renderer.setSize(newW, newH, false);
+      }
     };
 
     window.addEventListener('resize', handleResize);
 
-    // Animation Loop
-    let clock = new THREE.Clock();
+    // Animation Loop with framerate-independent performance.now()
+    const startTime = performance.now();
     let animationFrameId: number;
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
 
-      const elapsedTime = clock.getElapsedTime();
+      if (!containerRef.current || containerRef.current.clientWidth === 0 || containerRef.current.clientHeight === 0) {
+        return;
+      }
+
+      const elapsedTime = (performance.now() - startTime) / 1000;
 
       if (!prefersReducedMotion) {
         // Continuous Ambient Motion

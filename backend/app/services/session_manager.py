@@ -89,9 +89,10 @@ class PolySession:
         db = SessionLocal()
         try:
             # Check if case already exists for this session to prevent duplicate creation
-            existing = db.query(Case).filter(Case.case_number == f"POLY-{self.session_id}").first()
-            if existing:
-                return existing
+            if self.state.get("case_id"):
+                existing = db.query(Case).filter(Case.id == self.state["case_id"]).first()
+                if existing:
+                    return existing
 
             count = db.query(Case).count()
             case_number = f"POLY-{1024 + count}"
@@ -108,6 +109,8 @@ class PolySession:
             db.add(db_case)
             db.commit()
             db.refresh(db_case)
+            self.state["case_id"] = db_case.id
+            self.state["case_number"] = db_case.case_number
 
             # Create Escalation queue item
             db.add(Escalation(

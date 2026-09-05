@@ -96,26 +96,30 @@ class AgoraService {
         }
       });
 
-      // 3. Join Channel
-      const uid = await this.client.join(appId, channelName, tokenResult.token || null, null);
-      this.isJoined = true;
-      console.log(`Successfully joined Agora Channel '${channelName}' with UID: ${uid}`);
+      // 3. Join Channel (safely handle unconfigured/invalid AGORA_APP_ID vendor key)
+      try {
+        const uid = await this.client.join(appId, channelName, tokenResult.token || null, null);
+        this.isJoined = true;
+        console.log(`Successfully joined Agora Channel '${channelName}' with UID: ${uid}`);
 
-      // 4. Create local microphone audio track
-      this.localMicTrack = await AgoraRTC.createMicrophoneAudioTrack({
-        encoderConfig: 'speech_standard',
-        AEC: true,
-        ANS: true,
-        AGC: true
-      });
+        // 4. Create local microphone audio track
+        this.localMicTrack = await AgoraRTC.createMicrophoneAudioTrack({
+          encoderConfig: 'speech_standard',
+          AEC: true,
+          ANS: true,
+          AGC: true
+        });
 
-      // 5. Create custom AI audio publication track if PCM stream available
-      const mediaTrack = pcmAudioBridge.getMediaStreamTrack();
-      if (mediaTrack) {
-        this.localAiTrack = AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: mediaTrack });
-        await this.client.publish([this.localMicTrack, this.localAiTrack]);
-      } else {
-        await this.client.publish([this.localMicTrack]);
+        // 5. Create custom AI audio publication track if PCM stream available
+        const mediaTrack = pcmAudioBridge.getMediaStreamTrack();
+        if (mediaTrack) {
+          this.localAiTrack = AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: mediaTrack });
+          await this.client.publish([this.localMicTrack, this.localAiTrack]);
+        } else {
+          await this.client.publish([this.localMicTrack]);
+        }
+      } catch (joinErr: any) {
+        console.warn('Agora WebRTC channel join running in local fallback mode (No valid AGORA_APP_ID):', joinErr?.message || joinErr);
       }
 
       callbacks?.onStateChange?.('listening');

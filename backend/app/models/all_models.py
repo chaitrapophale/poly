@@ -26,7 +26,7 @@ class User(Base):
     phone_number = Column(String(50), nullable=True)
     email = Column(String(255), unique=True, index=True, nullable=True)
     location = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     cases = relationship("Case", back_populates="user")
     conversations = relationship("Conversation", back_populates="user")
@@ -40,7 +40,7 @@ class Agent(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(100), default="Support Specialist")
     is_online = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     cases = relationship("Case", back_populates="assigned_agent")
     escalations = relationship("Escalation", back_populates="assigned_agent")
@@ -60,8 +60,8 @@ class Case(Base):
     summary = Column(Text, nullable=True)
     otp_verified = Column(Boolean, default=True)
     call_duration_seconds = Column(Integer, default=165)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", back_populates="cases")
     assigned_agent = relationship("Agent", back_populates="cases")
@@ -81,7 +81,7 @@ class Conversation(Base):
     call_duration_seconds = Column(Integer, default=0)
     language_mode = Column(String(100), default="Hindi + English")
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", back_populates="conversations")
     case = relationship("Case", back_populates="conversations")
@@ -99,7 +99,7 @@ class Message(Base):
     translated_text = Column(Text, nullable=True)
     language_detected = Column(String(50), nullable=True)
     confidence_score = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     conversation = relationship("Conversation", back_populates="messages")
 
@@ -126,7 +126,7 @@ class Escalation(Base):
     waiting_time_seconds = Column(Integer, default=0)
     routing_node = Column(String(100), default="APAC-Central (Mumbai Edge)")
     status = Column(String(50), default="PENDING") # 'PENDING', 'ACCEPTED', 'COMPLETED'
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     case = relationship("Case", back_populates="escalations")
     assigned_agent = relationship("Agent", back_populates="escalations")
@@ -140,6 +140,6 @@ class AuditEvent(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
     timestamp_offset = Column(String(20), default="00:00")
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     case = relationship("Case", back_populates="audit_events")

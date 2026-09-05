@@ -122,7 +122,10 @@ class EscalationService:
         db = SessionLocal()
         try:
             raw_id = case_id.replace("case-", "")
-            case = db.query(Case).filter((Case.id == raw_id) | (Case.case_number == case_id)).first()
+            if raw_id.isdigit():
+                case = db.query(Case).filter((Case.id == int(raw_id)) | (Case.case_number == case_id)).first()
+            else:
+                case = db.query(Case).filter(Case.case_number == case_id).first()
             if not case:
                 return {"status": "NOT_FOUND", "message": f"Case {case_id} not found."}
 
@@ -198,7 +201,10 @@ class EscalationService:
         db = SessionLocal()
         try:
             raw_id = case_id.replace("case-", "")
-            case = db.query(Case).filter((Case.id == raw_id) | (Case.case_number == case_id)).first()
+            if raw_id.isdigit():
+                case = db.query(Case).filter((Case.id == int(raw_id)) | (Case.case_number == case_id)).first()
+            else:
+                case = db.query(Case).filter(Case.case_number == case_id).first()
             if not case:
                 return {"status": "NOT_FOUND", "message": f"Case {case_id} not found."}
 

@@ -76,7 +76,10 @@ def get_case_detail(case_id: str):
     try:
         # Extract numeric id if passed e.g. case-8042 -> 8042 or POLY-1024
         raw_id = case_id.replace("case-", "")
-        case = db.query(Case).filter((Case.id == raw_id) | (Case.case_number == case_id)).first()
+        if raw_id.isdigit():
+            case = db.query(Case).filter((Case.id == int(raw_id)) | (Case.case_number == case_id)).first()
+        else:
+            case = db.query(Case).filter(Case.case_number == case_id).first()
         
         if not case:
             # Fallback mock case for test robustness
