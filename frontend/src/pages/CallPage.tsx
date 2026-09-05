@@ -6,6 +6,7 @@ import { TranscriptTurn } from '../components/TranscriptTurn';
 import { Modal } from '../components/Modal';
 import { CallerState, TranscriptTurnItem } from '../types';
 import { agoraService } from '../lib/agoraService';
+import { pcmAudioBridge } from '../lib/pcmAudioBridge';
 import { API_BASE_URL } from '../lib/apiConfig';
 
 export default function ActiveCallPage() {
@@ -69,6 +70,9 @@ export default function ActiveCallPage() {
       isMounted = false;
       clearInterval(timer);
       agoraService.stopSession();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, [sessionId]);
 
@@ -76,6 +80,39 @@ export default function ActiveCallPage() {
     const mins = Math.floor(sec / 60);
     const secs = sec % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Speak POLY's voice response out loud via Web Speech Synthesis
+  const speakPolyResponse = (text: string, language?: string) => {
+    if (!text || typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      setCallState('listening');
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+      pcmAudioBridge.interruptPlayback();
+    } catch (e) {}
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const isHindi = (language && language.toLowerCase().includes('hindi')) || /[\u0900-\u097F]/.test(text) || /\b(namaste|mera|hai|nahi|kya|aap)\b/i.test(text);
+    utterance.lang = isHindi ? 'hi-IN' : 'en-US';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    utterance.onstart = () => {
+      setCallState('speaking');
+    };
+
+    utterance.onend = () => {
+      setCallState('listening');
+    };
+
+    utterance.onerror = () => {
+      setCallState('listening');
+    };
+
+    window.speechSynthesis.speak(utterance);
   };
 
   // Send turn to FastAPI Poly Agent
@@ -103,23 +140,96 @@ export default function ActiveCallPage() {
 
       if (data.action === 'ESCALATE' || data.state?.escalation_required) {
         setCallState('escalating');
-        setTimeout(() => navigate('/escalation'), 1200);
+        if (data.response_text) speakPolyResponse(data.response_text, data.state?.active_language);
+        setTimeout(() => navigate('/escalation'), 1500);
       } else if (data.action === 'CONFIRM') {
-        setCallState('speaking');
-        setTimeout(() => setShowConfirmModal(true), 800);
+        if (data.response_text) speakPolyResponse(data.response_text, data.state?.active_language);
+        setTimeout(() => setShowConfirmModal(true), 1200);
       } else {
-        setCallState('speaking');
-        setTimeout(() => setCallState('listening'), 2000);
+        if (data.response_text) {
+          speakPolyResponse(data.response_text, data.state?.active_language);
+        } else {
+          setCallState('speaking');
+          setTimeout(() => setCallState('listening'), 2000);
+        }
       }
     } catch (err) {
       console.warn('Backend interact error, simulating locally:', err);
-      // Fallback turn handling
       setCallState('listening');
     } finally {
       setIsProcessing(false);
       setUserInput('');
     }
   };
+
+  // Real-Time Browser Microphone Speech Recognition (Multilingual + Barge-In Interruption)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn('SpeechRecognition API not available in this browser environment.');
+      return;
+    }
+
+    let recognition: any = null;
+    let isMounted = true;
+
+    try {
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = activeLanguage.toLowerCase().includes('hindi') ? 'hi-IN' : 'en-US';
+
+      recognition.onresult = (event: any) => {
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        // Spoken Barge-In Interruption: If caller starts speaking while POLY is speaking
+        if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
+          console.log('Spoken Interruption / Barge-in detected: Canceling POLY voice response.');
+          window.speechSynthesis.cancel();
+          pcmAudioBridge.interruptPlayback();
+          setCallState('thinking');
+        }
+
+        if (finalTranscript.trim() && isMounted && !isProcessing) {
+          console.log('Captured microphone spoken turn:', finalTranscript);
+          handleSendTurn(finalTranscript.trim());
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Microphone Speech Recognition event error:', event?.error || event);
+      };
+
+      recognition.onend = () => {
+        if (isMounted && callState !== 'ended' && callState !== 'escalating') {
+          try {
+            recognition.start();
+          } catch (e) {}
+        }
+      };
+
+      recognition.start();
+      console.log('Real-Time Microphone Speech Listener active.');
+    } catch (err) {
+      console.warn('Could not initialize SpeechRecognition:', err);
+    }
+
+    return () => {
+      isMounted = false;
+      if (recognition) {
+        try {
+          recognition.stop();
+        } catch (e) {}
+      }
+    };
+  }, [activeLanguage, isProcessing, callState]);
 
   const handleEscalate = async () => {
     setCallState('escalating');

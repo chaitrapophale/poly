@@ -157,6 +157,15 @@ class AgoraService {
           console.warn('Could not create microphone track (Permission or Device issue):', micErr?.message || micErr);
         }
 
+        // Start PCM Audio Bridge capture for local voice pipeline
+        try {
+          await pcmAudioBridge.startMicCapture((_chunk) => {
+            // PCM 16kHz audio chunk ready
+          });
+        } catch (pcmErr) {
+          console.warn('PCM capture initialization error:', pcmErr);
+        }
+
         // 5. Publish tracks if available
         const tracksToPublish = [];
         if (this.localMicTrack) tracksToPublish.push(this.localMicTrack);

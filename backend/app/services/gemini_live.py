@@ -44,7 +44,7 @@ class GeminiLiveService:
             
             # Configure Live Session
             config = types.LiveConnectConfig(
-                response_modalities=[types.LiveModality.AUDIO, types.LiveModality.TEXT],
+                response_modalities=["AUDIO"],
                 speech_config=types.SpeechConfig(
                     voice_config=types.VoiceConfig(
                         prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Kore")
@@ -55,11 +55,12 @@ class GeminiLiveService:
                 )
             )
 
-            # Connect via async Live SDK
-            self.live_session = await self.client.aio.live.connect(
+            # Connect via async Live SDK context manager
+            self.live_context = self.client.aio.live.connect(
                 model=self.model_name,
                 config=config
             )
+            self.live_session = await self.live_context.__aenter__()
             self.is_connected = True
             logger.info(f"Connected to Gemini Live ({self.model_name}) for session {self.session_id}")
             return True
@@ -182,7 +183,13 @@ class GeminiLiveService:
 
     async def close(self):
         """Cleanly closes Gemini Live session."""
-        if self.live_session:
+        if hasattr(self, 'live_context') and self.live_context:
+            try:
+                await self.live_context.__aexit__(None, None, None)
+                logger.info(f"Gemini Live session {self.session_id} closed cleanly.")
+            except Exception as e:
+                logger.error(f"Error closing Gemini Live session: {e}")
+        elif self.live_session:
             try:
                 await self.live_session.close()
                 logger.info(f"Gemini Live session {self.session_id} closed cleanly.")
