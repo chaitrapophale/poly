@@ -6,6 +6,7 @@ import { TranscriptTurn } from '../components/TranscriptTurn';
 import { Modal } from '../components/Modal';
 import { CallerState, TranscriptTurnItem } from '../types';
 import { agoraService } from '../lib/agoraService';
+import { API_BASE_URL } from '../lib/apiConfig';
 
 export default function ActiveCallPage() {
   const navigate = useNavigate();
@@ -14,16 +15,16 @@ export default function ActiveCallPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [referenceInput, setReferenceInput] = useState('4281');
   const [agoraMessage, setAgoraMessage] = useState<string | null>(null);
-  const [sessionId] = useState<string>('session-8042');
+  const [sessionId] = useState(() => `session-${Math.floor(1000 + Math.random() * 9000)}`);
   const [activeLanguage, setActiveLanguage] = useState<string>('Hindi + English');
   const [transcript, setTranscript] = useState<TranscriptTurnItem[]>([
     {
-      id: 'turn-1',
+      id: 't-0',
       speaker: 'poly',
-      name: 'POLY Assistant',
-      timestamp: '00:05',
-      originalText: 'Namaste! Welcome to Poly Support. How can I help you with your account today?',
-      translatedText: 'Namaste! Welcome to Poly Support. How can I help you with your account today?'
+      speaker_name: 'POLY Assistant',
+      timestamp_offset: '00:05',
+      original_text: 'Namaste! Welcome to Poly Support. How can I help you with your account today?',
+      translated_text: 'Namaste! Welcome to Poly Support. How can I help you with your account today?'
     }
   ]);
   const [userInput, setUserInput] = useState<string>('');
@@ -34,7 +35,7 @@ export default function ActiveCallPage() {
     let isMounted = true;
 
     // Initialize backend agent session
-    fetch('http://localhost:8000/api/v1/agent/session', {
+    fetch(`${API_BASE_URL}/api/v1/agent/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId })
@@ -84,7 +85,7 @@ export default function ActiveCallPage() {
     setCallState('thinking');
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/agent/interact', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/agent/interact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, input_text: text })

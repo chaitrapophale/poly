@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Header } from '../../components/Header';
 import { Sidebar } from '../../components/Sidebar';
 import { EscalationCard } from '../../components/EscalationCard';
+import { API_BASE_URL } from '../../lib/apiConfig';
 
 export default function AgentDashboardPage() {
   const [escalations, setEscalations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchEscalations = () => {
-    fetch('http://localhost:8000/api/v1/cases/live-escalations')
+    fetch(`${API_BASE_URL}/api/v1/cases/live-escalations`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {

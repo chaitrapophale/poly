@@ -25,6 +25,17 @@ app.add_middleware(
 # Register API Router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+@app.get("/", tags=["Root"])
+def root():
+    return {
+        "status": "ok",
+        "app": settings.PROJECT_NAME,
+        "version": settings.VERSION,
+        "environment": settings.ENV,
+        "docs_url": "/docs",
+        "health_url": "/health"
+    }
+
 @app.get("/health", tags=["Health"])
 def root_health():
     return {

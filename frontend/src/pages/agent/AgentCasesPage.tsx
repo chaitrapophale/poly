@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Header } from '../../components/Header';
 import { Sidebar } from '../../components/Sidebar';
 import { StatusBadge } from '../../components/StatusBadge';
+import { API_BASE_URL } from '../../lib/apiConfig';
 
 export default function CasesDirectoryPage() {
   const [cases, setCases] = useState<any[]>([]);
@@ -11,7 +12,7 @@ export default function CasesDirectoryPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let url = `http://localhost:8000/api/v1/cases?status=${statusFilter}`;
+    let url = `${API_BASE_URL}/api/v1/cases?status=${statusFilter}`;
     if (searchQuery) url += `&search=${encodeURIComponent(searchQuery)}`;
 
     fetch(url)

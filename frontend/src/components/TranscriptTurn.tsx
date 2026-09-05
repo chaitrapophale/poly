@@ -11,6 +11,11 @@ export const TranscriptTurn: React.FC<TranscriptTurnProps> = ({ item }) => {
   const isSystem = item.speaker === 'system';
   const isAgent = item.speaker === 'agent';
 
+  const displayName = item.name || item.speaker_name || (isPoly ? 'POLY Assistant' : isAgent ? 'Support Agent' : 'Caller');
+  const displayTimestamp = item.timestamp || item.timestamp_offset || '';
+  const originalText = item.originalText || item.original_text || '';
+  const translatedText = item.translatedText || item.translated_text;
+
   if (isSystem) {
     return (
       <div className="w-full bg-tertiary-fixed/40 rounded-xl p-3.5 shadow-sm border border-tertiary-fixed-dim/60 flex gap-3 items-center my-1">
@@ -20,14 +25,14 @@ export const TranscriptTurn: React.FC<TranscriptTurnProps> = ({ item }) => {
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between">
             <span className="font-label-md text-label-md text-tertiary font-semibold">
-              {item.name}
+              {displayName}
             </span>
             <span className="font-label-sm text-label-sm text-on-surface-variant">
-              {item.timestamp}
+              {displayTimestamp}
             </span>
           </div>
           <p className="font-body-md text-body-md text-on-surface mt-0.5 font-medium">
-            {item.originalText}
+            {originalText}
           </p>
         </div>
       </div>
@@ -62,7 +67,7 @@ export const TranscriptTurn: React.FC<TranscriptTurnProps> = ({ item }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="font-label-md text-label-md text-on-surface font-semibold">
-              {item.name}
+              {displayName}
             </span>
             {item.language && (
               <span className="bg-surface-container px-2 py-0.5 rounded font-label-sm text-label-sm text-primary font-medium">
@@ -71,18 +76,18 @@ export const TranscriptTurn: React.FC<TranscriptTurnProps> = ({ item }) => {
             )}
           </div>
           <span className="font-label-sm text-label-sm text-on-surface-variant">
-            {item.timestamp}
+            {displayTimestamp}
           </span>
         </div>
 
         <p className="font-body-md text-body-md text-on-surface mt-1 leading-relaxed">
-          {item.originalText}
+          {originalText}
         </p>
 
-        {item.translatedText && item.translatedText !== item.originalText && (
+        {translatedText && translatedText !== originalText && (
           <div className="mt-1 text-on-surface-variant font-label-sm text-label-sm italic flex items-center gap-1">
             <span className="material-symbols-outlined text-[14px]">translate</span>
-            <span>English: &quot;{item.translatedText}&quot;</span>
+            <span>English: &quot;{translatedText}&quot;</span>
           </div>
         )}
       </div>

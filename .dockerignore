@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.local
+node_modules
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/dist
+**/.next
+**/build
+*.db
+poly.db

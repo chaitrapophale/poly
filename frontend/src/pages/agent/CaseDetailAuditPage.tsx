@@ -4,6 +4,7 @@ import { Header } from '../../components/Header';
 import { Sidebar } from '../../components/Sidebar';
 import { ContextSummary } from '../../components/ContextSummary';
 import { StatusBadge } from '../../components/StatusBadge';
+import { API_BASE_URL } from '../../lib/apiConfig';
 
 export default function CaseAuditTimelinePage() {
   const { id: caseId } = useParams<{ id: string }>();
@@ -11,7 +12,7 @@ export default function CaseAuditTimelinePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/v1/cases/${caseId}`)
+    fetch(`${API_BASE_URL}/api/v1/cases/${caseId}`)
       .then((res) => res.json())
       .then((data) => setCaseData(data))
       .catch((err) => console.warn('Using default case detail:', err))

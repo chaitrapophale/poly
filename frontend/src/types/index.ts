@@ -35,10 +35,14 @@ export interface ExtractedField {
 export interface TranscriptTurnItem {
   id: string;
   speaker: 'poly' | 'caller' | 'agent' | 'system';
-  name: string;
-  timestamp: string;
-  originalText: string;
+  name?: string;
+  speaker_name?: string;
+  timestamp?: string;
+  timestamp_offset?: string;
+  originalText?: string;
+  original_text?: string;
   translatedText?: string;
+  translated_text?: string;
   language?: string;
   confidence?: number;
   isConfirmed?: boolean;

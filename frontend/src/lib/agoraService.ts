@@ -6,6 +6,7 @@ import type {
   ConnectionState
 } from 'agora-rtc-sdk-ng';
 import { pcmAudioBridge } from './pcmAudioBridge';
+import { API_BASE_URL } from './apiConfig';
 
 export interface AgoraTokenBackendResponse {
   token: string | null;
@@ -31,7 +32,7 @@ class AgoraService {
 
   public async fetchToken(channelName: string): Promise<AgoraTokenBackendResponse> {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/agora/rtc-token', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/agora/rtc-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel_name: channelName, role: 1 })

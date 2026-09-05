@@ -6,6 +6,7 @@ import { ContextSummary } from '../../components/ContextSummary';
 import { TranscriptTurn } from '../../components/TranscriptTurn';
 import { TranscriptTurnItem } from '../../types';
 import { agoraService } from '../../lib/agoraService';
+import { API_BASE_URL } from '../../lib/apiConfig';
 
 export default function AgentEscalationDetailPage() {
   const { id: caseId } = useParams<{ id: string }>();
@@ -18,49 +19,41 @@ export default function AgentEscalationDetailPage() {
   const [transcript, setTranscript] = useState<TranscriptTurnItem[]>([
     {
       id: 't-1',
-      speaker: 'caller',
-      name: 'Aarav Patel',
-      timestamp: '00:08',
-      originalText: 'Mera account login nahi ho raha and password reset tried.',
-      translatedText: 'Mera account login nahi ho raha and password reset tried.'
+      speaker: 'poly',
+      speaker_name: 'POLY Assistant',
+      timestamp_offset: '00:05',
+      originalText: 'Namaste! Welcome to Poly Support. How can I help you today?',
+      translatedText: 'Namaste! Welcome to Poly Support. How can I help you today?'
     },
     {
       id: 't-2',
-      speaker: 'poly',
-      name: 'POLY Assistant',
-      timestamp: '00:15',
-      originalText: 'I can help. Can you confirm your customer ID?',
-      translatedText: 'I can help. Can you confirm your customer ID?'
+      speaker: 'caller',
+      speaker_name: 'Aarav Patel (Caller)',
+      timestamp_offset: '00:15',
+      originalText: 'Mera account reset code work nahi kar raha. Ticket reference 4281 hai.',
+      translatedText: 'My account reset code is not working. Ticket reference is 4281.'
     },
     {
       id: 't-3',
-      speaker: 'caller',
-      name: 'Aarav Patel',
-      timestamp: '00:24',
-      originalText: 'Customer ID is 4281.',
-      translatedText: 'Customer ID is 4281.'
+      speaker: 'poly',
+      speaker_name: 'POLY Assistant',
+      timestamp_offset: '00:20',
+      originalText: 'I heard your reference number as 4281. Is that correct?',
+      translatedText: 'I heard your reference number as 4281. Is that correct?'
     },
     {
       id: 't-4',
-      speaker: 'poly',
-      name: 'POLY Assistant',
-      timestamp: '00:32',
-      originalText: 'I heard customer ID 4281. And your ticket reference number?',
-      translatedText: 'I heard customer ID 4281. And your ticket reference number?'
+      speaker: 'caller',
+      speaker_name: 'Aarav Patel (Caller)',
+      timestamp_offset: '00:35',
+      originalText: 'Wait, code 4289 par aaya tha text message mein, last month ka code 4281 tha.',
+      translatedText: 'Wait, code 4289 came in text message, last month code was 4281.'
     },
     {
       id: 't-5',
-      speaker: 'caller',
-      name: 'Aarav Patel',
-      timestamp: '00:45',
-      originalText: 'Reference 4281... or wait, actually 4289.',
-      translatedText: 'Reference 4281... or wait, actually 4289.'
-    },
-    {
-      id: 't-6',
       speaker: 'poly',
-      name: 'POLY Assistant',
-      timestamp: '00:58',
+      speaker_name: 'POLY Assistant',
+      timestamp_offset: '00:58',
       originalText: "I don't want to record incorrect info. Connecting you with a human support specialist now.",
       translatedText: "I don't want to record incorrect info. Connecting you with a human support specialist now."
     }
@@ -68,7 +61,7 @@ export default function AgentEscalationDetailPage() {
   const [newTurnText, setNewTurnText] = useState('');
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/v1/cases/${caseId}`)
+    fetch(`${API_BASE_URL}/api/v1/cases/${caseId}`)
       .then((res) => res.json())
       .then((data) => setCaseData(data))
       .catch((err) => console.warn('Using default case context:', err))
@@ -90,7 +83,7 @@ export default function AgentEscalationDetailPage() {
     const newTurn: TranscriptTurnItem = {
       id: `t-${Date.now()}`,
       speaker: 'agent',
-      name: 'Priya Sharma (Specialist)',
+      speaker_name: 'Priya Sharma (Specialist)',
       timestamp: '02:46',
       originalText: newTurnText,
       translatedText: newTurnText
@@ -101,7 +94,7 @@ export default function AgentEscalationDetailPage() {
 
   const handleResolveCase = async () => {
     try {
-      await fetch(`http://localhost:8000/api/v1/cases/${caseId}/complete`, {
+      await fetch(`${API_BASE_URL}/api/v1/cases/${caseId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notes: 'Resolved reference number ambiguity directly via human call.' })

@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: poly-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=production
+      - PORT=8000
+      - HOST=0.0.0.0
+      - SECRET_KEY=${SECRET_KEY:-poly-agora-secret-key-change-in-production}
+      - AGORA_APP_ID=${AGORA_APP_ID:-}
+      - AGORA_APP_CERTIFICATE=${AGORA_APP_CERTIFICATE:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+    volumes:
+      - poly-data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: poly-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  poly-data:
