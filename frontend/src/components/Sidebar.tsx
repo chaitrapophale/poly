@@ -26,9 +26,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingEscalationsCount = 3 })
     <aside className="fixed left-0 top-0 h-full w-64 md:w-72 bg-surface-container-low z-50 flex flex-col justify-between shadow-[0_1px_8px_rgba(84,75,69,0.04)]">
       <div className="flex flex-col">
         <div className="h-16 flex items-center gap-3 px-6 border-b border-surface-container-high/40">
-          <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center text-on-primary font-bold text-lg shadow-sm">
-            P
-          </div>
+          <img
+            src="/poly-logo-3d.jpg"
+            alt="POLY Logo"
+            className="w-8 h-8 rounded-xl object-cover shadow-sm"
+          />
           <span className="font-title-md text-title-md text-on-surface font-semibold tracking-tight">
             Poly Support Portal
           </span>

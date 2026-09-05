@@ -16,9 +16,11 @@ export default function AgentLoginPage() {
       <div className="w-full max-w-md bg-surface-container-lowest p-8 rounded-3xl border border-surface-container-high shadow-lg space-y-6">
         <div className="text-center space-y-2">
           <Link to="/" className="inline-flex items-center gap-2 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-on-primary font-bold text-xl shadow-sm">
-              P
-            </div>
+            <img
+              src="/poly-logo-3d.jpg"
+              alt="POLY Logo"
+              className="w-10 h-10 rounded-xl object-cover shadow-sm"
+            />
             <span className="font-bold text-2xl tracking-tight text-on-surface">POLY</span>
           </Link>
           <h1 className="font-headline-sm text-headline-sm font-bold text-on-surface">

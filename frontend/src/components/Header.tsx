@@ -38,9 +38,9 @@ export const Header: React.FC<HeaderProps> = ({
 
           <Link to="/" className="flex items-center gap-3 group">
             <img
-              src="/poly-icon.svg"
+              src="/poly-logo-3d.jpg"
               alt="POLY Logo"
-              className="w-9 h-9 transition-transform group-hover:scale-105"
+              className="w-9 h-9 rounded-xl object-cover shadow-sm transition-transform group-hover:scale-105"
             />
             <div className="flex flex-col">
               <span className="font-extrabold text-2xl tracking-tight text-[#263845] font-jakarta leading-none">
