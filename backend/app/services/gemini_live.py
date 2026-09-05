@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 # Target Model for Gemini Live Preview
 LIVE_MODEL_NAME = "gemini-3.1-flash-live-preview"
-FALLBACK_MODEL_NAME = "gemini-2.0-flash-exp"
 
 class GeminiLiveService:
     def __init__(self, session_id: str):
@@ -66,23 +65,9 @@ class GeminiLiveService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to connect to Gemini Live model {self.model_name}: {e}. Retrying fallback {FALLBACK_MODEL_NAME}...")
-            try:
-                from google.genai import types
-                config = types.LiveConnectConfig(
-                    response_modalities=[types.LiveModality.AUDIO, types.LiveModality.TEXT]
-                )
-                self.live_session = await self.client.aio.live.connect(
-                    model=FALLBACK_MODEL_NAME,
-                    config=config
-                )
-                self.model_name = FALLBACK_MODEL_NAME
-                self.is_connected = True
-                return True
-            except Exception as fallback_err:
-                logger.error(f"Fallback Gemini Live connection failed: {fallback_err}")
-                self.is_connected = False
-                return False
+            logger.error(f"Failed to connect to Gemini Live model {self.model_name}: {e}")
+            self.is_connected = False
+            return False
 
     async def send_pcm_audio(self, pcm_data: bytes, sample_rate: int = 16000):
         """
