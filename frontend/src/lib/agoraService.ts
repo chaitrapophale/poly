@@ -29,6 +29,9 @@ class AgoraService {
   private localMicTrack: IMicrophoneAudioTrack | null = null;
   private localAiTrack: ILocalAudioTrack | null = null;
   private isJoined: boolean = false;
+  private isInitializing: boolean = false;
+  private currentChannel: string | null = null;
+  private activeInitPromise: Promise<boolean> | null = null;
 
   public async fetchToken(channelName: string): Promise<AgoraTokenBackendResponse> {
     try {
@@ -47,7 +50,7 @@ class AgoraService {
         token: null,
         channel_name: channelName,
         uid: 0,
-        app_id: process.env.NEXT_PUBLIC_AGORA_APP_ID || (import.meta as any).env?.VITE_AGORA_APP_ID || null,
+        app_id: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_AGORA_APP_ID as string) || null,
         status: 'BACKEND_OFFLINE',
         message: 'Could not reach backend token endpoint.'
       };
@@ -58,24 +61,59 @@ class AgoraService {
     channelName: string,
     callbacks?: AgoraSessionCallbacks
   ): Promise<boolean> {
+    if (this.isJoined && this.currentChannel === channelName && this.client) {
+      console.log(`Agora session already connected to channel '${channelName}'. Skipping redundant init.`);
+      callbacks?.onStateChange?.('connected');
+      return true;
+    }
+
+    if (this.isInitializing && this.activeInitPromise) {
+      console.log('Agora session initialization in progress. Awaiting current initialization task...');
+      return this.activeInitPromise;
+    }
+
+    this.isInitializing = true;
+    this.activeInitPromise = this.internalStartSession(channelName, callbacks)
+      .finally(() => {
+        this.isInitializing = false;
+        this.activeInitPromise = null;
+      });
+
+    return this.activeInitPromise;
+  }
+
+  private async internalStartSession(
+    channelName: string,
+    callbacks?: AgoraSessionCallbacks
+  ): Promise<boolean> {
     try {
       callbacks?.onStateChange?.('connecting');
 
+      // Stop any existing dirty session before initializing new client
+      if (this.client || this.isJoined) {
+        await this.stopSession();
+      }
+
       const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
+
+      // Disable excessive Agora internal verbose logs
+      try {
+        AgoraRTC.setLogLevel(3);
+      } catch (e) {}
 
       // 1. Fetch token from FastAPI backend
       const tokenResult = await this.fetchToken(channelName);
-      const appId = tokenResult.app_id || process.env.NEXT_PUBLIC_AGORA_APP_ID || (import.meta as any).env?.VITE_AGORA_APP_ID;
+      const appId = tokenResult.app_id || (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_AGORA_APP_ID as string) || '';
 
       if (!appId) {
-        console.warn('AGORA_APP_ID is not configured in backend or frontend env.');
-        callbacks?.onError?.('AGORA_APP_ID missing. Please configure AGORA_APP_ID in .env file.');
+        console.warn('AGORA_APP_ID is not configured. Running voice agent in local simulation mode.');
         callbacks?.onStateChange?.('listening');
-        return false;
+        return true;
       }
 
       // 2. Initialize RTC client
       this.client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+      this.currentChannel = channelName;
 
       this.client.on('connection-state-change', (curState) => {
         console.log('Agora Connection State:', curState);
@@ -87,40 +125,57 @@ class AgoraService {
       });
 
       this.client.on('user-published', async (user, mediaType) => {
-        await this.client?.subscribe(user, mediaType);
-        if (mediaType === 'audio') {
-          const remoteTrack = user.audioTrack;
-          remoteTrack?.play();
-          if (remoteTrack) {
-            callbacks?.onRemoteAudioTrack?.(remoteTrack);
+        try {
+          await this.client?.subscribe(user, mediaType);
+          if (mediaType === 'audio') {
+            const remoteTrack = user.audioTrack;
+            remoteTrack?.play();
+            if (remoteTrack) {
+              callbacks?.onRemoteAudioTrack?.(remoteTrack);
+            }
           }
+        } catch (subErr) {
+          console.warn('Agora subscribe error:', subErr);
         }
       });
 
-      // 3. Join Channel (safely handle unconfigured/invalid AGORA_APP_ID vendor key)
+      // 3. Join Channel
       try {
         const uid = await this.client.join(appId, channelName, tokenResult.token || null, null);
         this.isJoined = true;
         console.log(`Successfully joined Agora Channel '${channelName}' with UID: ${uid}`);
 
-        // 4. Create local microphone audio track
-        this.localMicTrack = await AgoraRTC.createMicrophoneAudioTrack({
-          encoderConfig: 'speech_standard',
-          AEC: true,
-          ANS: true,
-          AGC: true
-        });
+        // 4. Create local microphone track safely
+        try {
+          this.localMicTrack = await AgoraRTC.createMicrophoneAudioTrack({
+            encoderConfig: 'speech_standard',
+            AEC: true,
+            ANS: true,
+            AGC: true
+          });
+        } catch (micErr: any) {
+          console.warn('Could not create microphone track (Permission or Device issue):', micErr?.message || micErr);
+        }
 
-        // 5. Create custom AI audio publication track if PCM stream available
+        // 5. Publish tracks if available
+        const tracksToPublish = [];
+        if (this.localMicTrack) tracksToPublish.push(this.localMicTrack);
+
         const mediaTrack = pcmAudioBridge.getMediaStreamTrack();
         if (mediaTrack) {
-          this.localAiTrack = AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: mediaTrack });
-          await this.client.publish([this.localMicTrack, this.localAiTrack]);
-        } else {
-          await this.client.publish([this.localMicTrack]);
+          try {
+            this.localAiTrack = AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: mediaTrack });
+            tracksToPublish.push(this.localAiTrack);
+          } catch (aiTrackErr) {
+            console.warn('Could not create custom AI track:', aiTrackErr);
+          }
+        }
+
+        if (tracksToPublish.length > 0 && this.isJoined && this.client) {
+          await this.client.publish(tracksToPublish);
         }
       } catch (joinErr: any) {
-        console.warn('Agora WebRTC channel join running in local fallback mode (No valid AGORA_APP_ID):', joinErr?.message || joinErr);
+        console.warn('Agora WebRTC channel join running in local fallback mode:', joinErr?.message || joinErr);
       }
 
       callbacks?.onStateChange?.('listening');
@@ -138,21 +193,33 @@ class AgoraService {
   public async stopSession(): Promise<void> {
     try {
       if (this.localMicTrack) {
-        this.localMicTrack.stop();
-        this.localMicTrack.close();
+        try {
+          this.localMicTrack.stop();
+          this.localMicTrack.close();
+        } catch (e) {}
         this.localMicTrack = null;
       }
+
       if (this.localAiTrack) {
-        this.localAiTrack.stop();
-        this.localAiTrack.close();
+        try {
+          this.localAiTrack.stop();
+          this.localAiTrack.close();
+        } catch (e) {}
         this.localAiTrack = null;
       }
-      if (this.client && this.isJoined) {
-        await this.client.leave();
-        this.client.removeAllListeners();
+
+      if (this.client) {
+        try {
+          if (this.isJoined) {
+            await this.client.leave();
+          }
+          this.client.removeAllListeners();
+        } catch (e) {}
         this.client = null;
-        this.isJoined = false;
       }
+
+      this.isJoined = false;
+      this.currentChannel = null;
       pcmAudioBridge.stopAll();
       console.log('Agora WebRTC session stopped cleanly.');
     } catch (err) {
