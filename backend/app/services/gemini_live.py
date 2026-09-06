@@ -77,7 +77,9 @@ class GeminiLiveService:
         if self.live_session and self.is_connected:
             try:
                 from google.genai import types
-                logger.info(f"[OBSERVABILITY - VOICE] MIC AUDIO (16kHz PCM, {len(pcm_data)} bytes) -> GEMINI LIVE ({self.model_name})")
+                logger.info(f"[LIVE_VOICE_TRACE] MIC_PCM -> length={len(pcm_data)} bytes sample_rate={sample_rate}")
+                logger.info(f"[LIVE_VOICE_TRACE] BACKEND_WS -> session={self.session_id}")
+                logger.info(f"[LIVE_VOICE_TRACE] GEMINI_LIVE_SESSION -> model={self.model_name}")
                 await self.live_session.send(
                     input=types.LiveClientRealtimeInput(
                         media_chunks=[
@@ -98,7 +100,7 @@ class GeminiLiveService:
         if self.live_session and self.is_connected:
             try:
                 from google.genai import types
-                logger.info(f"[OBSERVABILITY - VOICE] TEXT PROMPT -> GEMINI LIVE ({self.model_name}): \"{text}\"")
+                logger.info(f"[LIVE_VOICE_TRACE] TEXT_IN -> GEMINI LIVE ({self.model_name}): \"{text}\"")
                 await self.live_session.send(
                     input=types.LiveClientContent(
                         turns=[
@@ -124,10 +126,10 @@ class GeminiLiveService:
         - tool_call
         """
         if not self.live_session or not self.is_connected:
-            # Yield simulated event for local testing mode
             yield {
                 "event": "simulated_audio",
-                "text": "Gemini Live initialized in local session mode."
+                "text": "Gemini Live initialized in local session mode.",
+                "source": "gemini_live"
             }
             return
 
@@ -156,29 +158,35 @@ class GeminiLiveService:
                         # 1. Real Audio Output (PCM 24kHz)
                         if part.inline_data:
                             self.is_speaking = True
-                            logger.info(f"[OBSERVABILITY - VOICE] GEMINI LIVE -> AI AUDIO ({audio_len} bytes 24kHz PCM) -> PLAYBACK")
+                            logger.info(f"[LIVE_VOICE_TRACE] GEMINI_AUDIO_OUT -> bytes={audio_len} 24kHz PCM -> BROWSER_PLAYBACK")
                             yield {
                                 "event": "audio_output",
                                 "pcm_bytes": part.inline_data.data,
-                                "mime_type": part.inline_data.mime_type
+                                "mime_type": part.inline_data.mime_type,
+                                "source": "gemini_live",
+                                "model": self.model_name
                             }
 
                         # 2. Output Transcription Text
                         if part.text:
                             self.current_transcript_output += part.text
+                            logger.info(f"[LIVE_VOICE_TRACE] GEMINI_TEXT_OUT -> text=\"{part.text}\"")
                             yield {
                                 "event": "output_transcript_chunk",
                                 "text": part.text,
-                                "accumulated_text": self.current_transcript_output
+                                "accumulated_text": self.current_transcript_output,
+                                "source": "gemini_live",
+                                "model": self.model_name
                             }
 
                 # 3. Interruption Event (Caller spoke while Poly was speaking)
                 if server_content.interrupted:
                     self.is_speaking = False
-                    logger.info("[OBSERVABILITY - VOICE] INTERRUPT DETECTED -> GEMINI LIVE BARGE-IN")
+                    logger.info("[LIVE_VOICE_TRACE] INTERRUPT DETECTED -> GEMINI LIVE BARGE-IN")
                     yield {
                         "event": "interrupted",
-                        "reason": "Caller barge-in detected"
+                        "reason": "Caller barge-in detected",
+                        "source": "gemini_live"
                     }
 
                 # 4. Turn Complete Event
@@ -186,10 +194,12 @@ class GeminiLiveService:
                     self.is_speaking = False
                     completed_output = self.current_transcript_output
                     self.current_transcript_output = ""
-                    logger.info(f"[OBSERVABILITY - VOICE] TURN COMPLETE -> GEMINI_ASSEMBLED_TEXT: \"{completed_output}\"")
+                    logger.info(f"[LIVE_VOICE_TRACE] TURN COMPLETE -> GEMINI_ASSEMBLED_TEXT: \"{completed_output}\"")
                     yield {
                         "event": "turn_complete",
-                        "output_text": completed_output
+                        "output_text": completed_output,
+                        "source": "gemini_live",
+                        "model": self.model_name
                     }
 
         except Exception as e:

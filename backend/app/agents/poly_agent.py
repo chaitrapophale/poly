@@ -35,13 +35,22 @@ class PolyAgent:
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
         self.client = None
-        self.model_name = settings.GEMINI_MODEL or "gemini-3.5-flash"
+        base_model = settings.GEMINI_MODEL or "gemini-3.5-flash"
+        self.model_candidates = [
+            base_model,
+            "gemini-3.6-flash",
+            "gemini-3.1-flash-lite-preview",
+            "gemini-flash-latest"
+        ]
+        # Preserve order while removing duplicates
+        self.model_candidates = list(dict.fromkeys(self.model_candidates))
+        self.model_name = self.model_candidates[0]
         
         if self.api_key and self.api_key != "mock_gemini_api_key":
             try:
                 from google import genai
                 self.client = genai.Client(api_key=self.api_key)
-                logger.info(f"PolyAgent initialized with Google GenAI client ({self.model_name}).")
+                logger.info(f"PolyAgent initialized with Google GenAI client (candidates: {self.model_candidates}).")
             except Exception as e:
                 logger.warning(f"Could not initialize google.genai Client: {e}")
 
@@ -72,7 +81,7 @@ class PolyAgent:
         }
 
     def process_turn(
-        self, state: Dict[str, Any], caller_input: str, transcript: Optional[List[Dict[str, Any]]] = None
+        self, state: Dict[str, Any], caller_input: str, transcript: Optional[List[Dict[str, Any]]] = None, turn_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Processes a conversation turn dynamically:
@@ -138,8 +147,28 @@ class PolyAgent:
         # 5. Question Prioritization (only for genuine missing fields/conflicts)
         next_question_field = QuestionPlanner.get_next_question_field(state)
 
-        # 6. Generate Natural Language Response via Gemini 3.5 Flash
-        response_text = self._generate_response(state, caller_input, decision, next_question_field, transcript=transcript)
+        # 6. Generate Natural Language Response via Gemini REST model chain (generate_content only)
+        gen_result = self._generate_response(state, caller_input, decision, next_question_field, transcript=transcript, turn_id=turn_id)
+        
+        if isinstance(gen_result, tuple):
+            response_text, source, model_used = gen_result
+        else:
+            response_text, source, model_used = gen_result, "gemini_rest", self.model_name
+
+        if source == "safe_failure" or response_text is None:
+            state["escalation_required"] = True
+            state["escalation_reason"] = "Gemini AI reasoning service unavailable across all REST candidate models."
+            safe_text = "I am experiencing temporary connection difficulties with my reasoning service. Connecting you directly with a human support specialist right away."
+            logger.warning(f"[SAFE_FAILURE_TRIGGERED] turn_id={turn_id or 'N/A'} source=safe_failure action=ESCALATE")
+            return {
+                "response_text": safe_text,
+                "response_audio_url": None,
+                "state": state,
+                "action": DecisionState.ESCALATE,
+                "source": "safe_failure",
+                "model": None,
+                "error": "Gemini API unavailable or rate-limited"
+            }
 
         # Update Summary narrative dynamically
         state["summary"] = f"Caller discussed: '{state.get('issue') or 'general inquiry'}'. Detected language: {detected_language}."
@@ -150,7 +179,9 @@ class PolyAgent:
             "state": state,
             "action": decision,
             "confidence": confidence_result,
-            "next_field": next_question_field
+            "next_field": next_question_field,
+            "source": source,
+            "model": model_used
         }
 
     def _detect_language(self, text: str) -> str:
@@ -281,16 +312,26 @@ class PolyAgent:
         caller_input: str,
         decision: str,
         next_field: Optional[Dict[str, Any]],
-        transcript: Optional[List[Dict[str, Any]]] = None
-    ) -> str:
-        """Generates response strictly via Gemini 3.5 Flash using full conversation context and structured observability logging."""
+        transcript: Optional[List[Dict[str, Any]]] = None,
+        turn_id: Optional[str] = None,
+        request_id: Optional[str] = None
+    ) -> tuple[Optional[str], str, Optional[str]]:
+        """
+        Generates response strictly via Gemini REST models (generate_content only).
+        Returns tuple: (response_text, source, model_name).
+        If all REST candidates fail, returns (None, "safe_failure", None).
+        """
+        active_turn_id = turn_id or f"turn_{len(transcript or []) + 1}"
+        active_req_id = request_id or f"req-{active_turn_id}"
+
+        logger.info(f"[POLY_TURN_START] turnId={active_turn_id} request_id={active_req_id} callerText=\"{caller_input}\"")
+        logger.info(f"[POLY_AGENT_INPUT] turnId={active_turn_id} request_id={active_req_id} text=\"{caller_input}\" history_length={len(transcript or [])}")
         
         history_turns = []
         if transcript:
             for t in transcript[-15:]:
                 speaker = "Caller" if t.get("speaker") == "caller" else "POLY"
                 text = t.get("originalText") or t.get("original_text") or ""
-                # Strip previous structural headers if present in history
                 clean_text = self._clean_response_text(text)
                 if clean_text:
                     history_turns.append(f"{speaker}: {clean_text}")
@@ -309,18 +350,19 @@ class PolyAgent:
             f"POLY:"
         )
 
-        # STRUCTURED OBSERVABILITY LOGGING
-        logger.info(f"[OBSERVABILITY] USER INPUT: \"{caller_input}\"")
-        logger.info(f"[OBSERVABILITY] CONVERSATION CONTEXT: {context_summary}")
-        logger.info(f"[OBSERVABILITY] GEMINI REQUEST MODEL: {self.model_name}")
-
         if self.client:
-            # Retry loop for API rate-limits (429) or transient network resets
-            for attempt in range(3):
+            from google.genai import types
+            for target_model in self.model_candidates:
+                # SAFETY CHECK: Ensure Live models are NEVER called via generate_content
+                if "live" in target_model.lower():
+                    logger.error(f"[MODEL_SEPARATION_VIOLATION] Refusing to call Live model '{target_model}' via generate_content REST API.")
+                    continue
+
+                logger.info(f"[POLY_REST_REQUEST] request_id={active_req_id} turn_id={active_turn_id} model={target_model} api=google.genai function=generate_content")
+                
                 try:
-                    from google.genai import types
                     response = self.client.models.generate_content(
-                        model=self.model_name,
+                        model=target_model,
                         contents=prompt,
                         config=types.GenerateContentConfig(
                             system_instruction=POLY_SYSTEM_INSTRUCTION,
@@ -329,77 +371,33 @@ class PolyAgent:
                         )
                     )
                     if response and response.text:
-                        resp_text = self._clean_response_text(response.text)
-                        logger.info(f"[OBSERVABILITY] GEMINI RAW RESPONSE: \"{response.text}\"")
-                        logger.info(f"[OBSERVABILITY] GEMINI ASSEMBLED RESPONSE: \"{resp_text}\"")
-                        logger.info(f"[OBSERVABILITY] FINAL POLY RESPONSE: \"{resp_text}\"")
-                        return resp_text
+                        raw_text = response.text
+                        resp_text = self._clean_response_text(raw_text)
+                        
+                        logger.info(
+                            f"[POLY_REST_SUCCESS] request_id={active_req_id} turn_id={active_turn_id} "
+                            f"model={target_model} http_status=200 status=success source=gemini_rest "
+                            f"text=\"{resp_text}\""
+                        )
+                        logger.info(f"[GEMINI_RAW_TEXT] request_id={active_req_id} turn_id={active_turn_id} text=\"{raw_text}\"")
+                        logger.info(f"[GEMINI_ASSEMBLED_TEXT] request_id={active_req_id} turn_id={active_turn_id} text=\"{resp_text}\"")
+                        logger.info(f"[POLY_AGENT_OUTPUT] request_id={active_req_id} turn_id={active_turn_id} text=\"{resp_text}\" source=gemini_rest")
+                        logger.info(f"[BACKEND_SENT_TEXT] request_id={active_req_id} turn_id={active_turn_id} text=\"{resp_text}\" source=gemini_rest")
+                        return (resp_text, "gemini_rest", target_model)
                 except Exception as e:
-                    logger.warning(f"[GEMINI RETRY {attempt + 1}/3] API call failed for {self.model_name}: {e}")
-                    if attempt < 2:
-                        time.sleep(1.5)
+                    http_status = 429 if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e) else 500
+                    logger.warning(
+                        f"[POLY_REST_FAILURE] request_id={active_req_id} turn_id={active_turn_id} "
+                        f"model={target_model} http_status={http_status} status=failed "
+                        f"exception_type={type(e).__name__} error=\"{str(e)[:200]}\""
+                    )
 
-        # Dynamic Contextual Response Generator for offline/rate-limited environments
-        logger.warning("[GEMINI FALLBACK] Gemini API unavailable or rate-limited. Synthesizing context-aware response.")
-        raw_fallback = self._synthesize_contextual_fallback(state, caller_input, decision)
-        return self._clean_response_text(raw_fallback)
-
-    def _synthesize_contextual_fallback(self, state: Dict[str, Any], caller_input: str, decision: str) -> str:
-        """Contextually synthesizes a unique, relevant natural response without any hardcoded ticket trees."""
-        text_lower = caller_input.lower()
-        active_lang = state.get("active_language", "English")
-        is_hindi = "Hindi" in active_lang or any(w in text_lower for w in ["mera", "hai", "nahi", "ho", "raha", "haan", "par", "kya", "aap", "namaste", "kal", "se"])
-
-        # 1. Critical Detail Confirmation
-        if decision == DecisionState.CONFIRM and state.get("reference_number"):
-            return f"I heard your reference number as {state['reference_number']}. Is that correct?"
-
-        # 2. Support Hours Inquiry
-        if any(w in text_lower for w in ["hours", "timings", "schedule", "open", "close"]):
-            if is_hindi:
-                return "Humari customer support team 24/7 active hai. Aap bataiye main aapki kya help kar sakta hoon?"
-            return "Our support team is available 24 hours a day, 7 days a week. How can I assist you today?"
-
-        # 3. Email Update Inquiry
-        if any(w in text_lower for w in ["change email", "update email", "new email"]):
-            if is_hindi:
-                return "Aap apne account settings mein jaakar Naya email address update kar sakte hain. Main instructions share kar doon?"
-            return "You can easily update your email address in account settings. Would you like me to walk you through the steps?"
-
-        # 4. App Logout / Crash
-        if any(w in text_lower for w in ["logging me out", "logout", "crashing", "freeze", "app"]):
-            if is_hindi:
-                return "Frequent logouts fixed karne ke liye app cache clear karke latest version update karein."
-            return "I understand how inconvenient frequent logouts are. Try clearing your app cache or updating to the latest version."
-
-        # 5. Billing / Double Charge
-        if any(w in text_lower for w in ["charged", "billing", "payment", "refund", "deduct"]):
-            if is_hindi:
-                return "Double payment deduct hone ke liye apologies. Main billing team ke saath refund review initiate kar deta hoon."
-            return "I apologize for the double charge. I will initiate a billing review and refund request for your transaction."
-
-        # 6. Verification Code / OTP
-        if any(w in text_lower for w in ["verification code", "otp", "code"]):
-            if is_hindi:
-                return "Agar verification OTP code nahi mil raha, mobile network check karke resend code try karein."
-            return "If your verification code isn't arriving, check your cellular connection or hit resend in a minute."
-
-        # 7. Topic Switch
-        if any(w in text_lower for w in ["actually", "forget that", "another question", "different issue"]):
-            if is_hindi:
-                return "Bilkul! Aap doosra question poochiye, main help karunga."
-            return "Sure! Tell me about your other question and I'll be happy to help."
-
-        # 8. Password / Login
-        if any(w in text_lower for w in ["password", "login", "access"]):
-            if is_hindi:
-                return "Account access issues mein main madad kar sakta hoon. Kya error message show ho raha hai?"
-            return "I can help resolve your account access issue. What error message are you seeing on screen?"
-
-        # 9. Generic Unseen Query
-        if is_hindi:
-            return f"Samajh gaya. '{caller_input}' ke bare mein main assist kar sakta hoon."
-        return f"I understand your request regarding '{caller_input}'. Let's solve this together."
+        # ALL REST CANDIDATES FAILED OR CLIENT UNAVAILABLE -> SAFE FAILURE STATE (NO FAKE LLM FALLBACK)
+        logger.error(
+            f"[POLY_REST_ALL_MODELS_FAILED] request_id={active_req_id} turn_id={active_turn_id} "
+            f"source=safe_failure error=\"All Gemini REST models unavailable or rate-limited\""
+        )
+        return (None, "safe_failure", None)
 
 poly_agent = PolyAgent()
 

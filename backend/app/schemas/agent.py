@@ -11,6 +11,8 @@ class AgentInteractResponse(BaseModel):
     agora_channel: str
     response_text: Optional[str] = None
     action: str
+    source: Optional[str] = "gemini_rest"
+    model: Optional[str] = None
     state: Dict[str, Any]
     transcript: List[Dict[str, Any]]
 

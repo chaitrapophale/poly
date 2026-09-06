@@ -50,8 +50,10 @@ class PolySession:
         })
 
         # Poly Agent turn processing
-        agent_result = poly_agent.process_turn(self.state, text, transcript=self.transcript)
+        agent_result = poly_agent.process_turn(self.state, text, transcript=self.transcript, turn_id=turn_id)
         response_text = agent_result.get("response_text")
+        source = agent_result.get("source", "gemini_rest")
+        model = agent_result.get("model")
 
         # Record Poly response turn if not yielded
         if response_text:
@@ -62,11 +64,13 @@ class PolySession:
                 "name": "POLY Assistant",
                 "timestamp": "00:20",
                 "originalText": response_text,
-                "translatedText": response_text
+                "translatedText": response_text,
+                "source": source,
+                "model": model
             })
 
         # If escalation was triggered, persist case to database
-        if self.state["escalation_required"]:
+        if self.state.get("escalation_required"):
             self._persist_escalated_case()
 
         return {
@@ -74,6 +78,8 @@ class PolySession:
             "agora_channel": self.agora_channel,
             "turn_id": turn_id,
             "response_text": response_text,
+            "source": source,
+            "model": model,
             "action": agent_result.get("action"),
             "state": self.state,
             "transcript": self.transcript
