@@ -2,9 +2,19 @@ export class PCMAudioBridge {
   private audioCtx: AudioContext | null = null;
   private micStream: MediaStream | null = null;
   private scriptProcessor: ScriptProcessorNode | null = null;
+  private silentGain: GainNode | null = null;
   private destinationNode: MediaStreamAudioDestinationNode | null = null;
   private activeSources: AudioBufferSourceNode[] = [];
   private nextStartTime: number = 0;
+  private totalAudioBytesPlayed: number = 0;
+
+  // Explicit Interruption Diagnostic State
+  public polyCurrentlySpeaking: boolean = false;
+  public callerInputDetected: boolean = false;
+  public callerInputLevel: number = 0.0;
+  public polyOutputPlaying: boolean = false;
+  public interruptionTriggered: boolean = false;
+  public interruptionReason: string = "None";
 
   public async startMicCapture(onPCMChunk: (pcmBuffer: ArrayBuffer) => void): Promise<boolean> {
     try {
@@ -23,15 +33,29 @@ export class PCMAudioBridge {
       const source = this.audioCtx.createMediaStreamSource(this.micStream);
       this.scriptProcessor = this.audioCtx.createScriptProcessor(4096, 1, 1);
 
+      // Silent GainNode to prevent mic audio from looping back to speakers
+      this.silentGain = this.audioCtx.createGain();
+      this.silentGain.gain.value = 0.0;
+
       this.scriptProcessor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
+        
+        // Calculate RMS caller input level
+        let sum = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sum += inputData[i] * inputData[i];
+        }
+        this.callerInputLevel = Math.sqrt(sum / inputData.length);
+        this.callerInputDetected = this.callerInputLevel > 0.04; // VAD threshold
+
         const pcm16 = this.float32ToPCM16(inputData);
         onPCMChunk(pcm16.buffer as ArrayBuffer);
       };
 
       source.connect(this.scriptProcessor);
-      this.scriptProcessor.connect(this.audioCtx.destination);
-      console.log('Microphone 16kHz PCM capture started.');
+      this.scriptProcessor.connect(this.silentGain);
+      this.silentGain.connect(this.audioCtx.destination);
+      console.log('Microphone 16kHz PCM capture started (Isolated Input/Output Path).');
       return true;
     } catch (err) {
       console.error('Error starting microphone capture:', err);
@@ -62,19 +86,50 @@ export class PCMAudioBridge {
       const startTime = Math.max(currentTime, this.nextStartTime);
       source.start(startTime);
       this.nextStartTime = startTime + audioBuffer.duration;
+      this.totalAudioBytesPlayed += pcmBuffer.byteLength;
 
       this.activeSources.push(source);
+      this.polyCurrentlySpeaking = true;
+      this.polyOutputPlaying = true;
+
+      console.log(
+        `[FRONTEND_AUDIO_DIAGNOSTIC] FRONTEND_AUDIO_BYTES=${pcmBuffer.byteLength} ` +
+        `PLAYBACK_QUEUE_BYTES=${this.totalAudioBytesPlayed} active_sources=${this.activeSources.length}`
+      );
+
       source.onended = () => {
         const idx = this.activeSources.indexOf(source);
         if (idx !== -1) this.activeSources.splice(idx, 1);
+        if (this.activeSources.length === 0) {
+          this.polyCurrentlySpeaking = false;
+          this.polyOutputPlaying = false;
+        }
       };
     } catch (err) {
       console.error('Error playing 24kHz PCM chunk:', err);
     }
   }
 
+  public evaluateBargeIn(reason: string = "Caller speech VAD threshold"): boolean {
+    if (this.polyCurrentlySpeaking && this.callerInputDetected) {
+      this.interruptionTriggered = true;
+      this.interruptionReason = reason;
+      console.log(
+        `[INTERRUPTION_DETECTED] reason="${reason}", timestamp=${Date.now()}, ` +
+        `polyCurrentlySpeaking=${this.polyCurrentlySpeaking}, callerInputDetected=${this.callerInputDetected}, ` +
+        `callerInputLevel=${this.callerInputLevel.toFixed(3)}, audioQueueLength=${this.activeSources.length}`
+      );
+      this.interruptPlayback();
+      return true;
+    }
+    return false;
+  }
+
   public interruptPlayback() {
-    console.log('Interruption detected: Yielding Poly voice audio queue.');
+    console.log(
+      `[INTERRUPTION_EXECUTE] Stopping Poly voice audio queue. ` +
+      `polyCurrentlySpeaking=${this.polyCurrentlySpeaking}, callerInputDetected=${this.callerInputDetected}`
+    );
     for (const source of this.activeSources) {
       try {
         source.stop();
@@ -82,6 +137,8 @@ export class PCMAudioBridge {
       } catch (e) {}
     }
     this.activeSources = [];
+    this.polyCurrentlySpeaking = false;
+    this.polyOutputPlaying = false;
     if (this.audioCtx) {
       this.nextStartTime = this.audioCtx.currentTime;
     }
@@ -100,6 +157,10 @@ export class PCMAudioBridge {
     if (this.scriptProcessor) {
       this.scriptProcessor.disconnect();
       this.scriptProcessor = null;
+    }
+    if (this.silentGain) {
+      this.silentGain.disconnect();
+      this.silentGain = null;
     }
     if (this.micStream) {
       this.micStream.getTracks().forEach((t) => t.stop());
@@ -130,3 +191,4 @@ export class PCMAudioBridge {
 }
 
 export const pcmAudioBridge = new PCMAudioBridge();
+

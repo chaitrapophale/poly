@@ -72,6 +72,7 @@ class PolySession:
         return {
             "session_id": self.session_id,
             "agora_channel": self.agora_channel,
+            "turn_id": turn_id,
             "response_text": response_text,
             "action": agent_result.get("action"),
             "state": self.state,

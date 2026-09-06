@@ -123,6 +123,7 @@ export default function ActiveCallPage() {
     setCallState('thinking');
 
     try {
+      console.log(`[FRONTEND_SENT_TEXT] text_len=${text.length}, content="${text}"`);
       const res = await fetch(`${API_BASE_URL}/api/v1/agent/interact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -132,8 +133,14 @@ export default function ActiveCallPage() {
       if (!res.ok) throw new Error('Agent API failed');
       const data = await res.json();
 
+      console.log(
+        `[FRONTEND_RECEIVED_TEXT] text_len=${data.response_text?.length || 0}, ` +
+        `turn_id=${data.turn_id || 'N/A'}, content="${data.response_text || ''}"`
+      );
+
       if (data.transcript) {
         setTranscript(data.transcript);
+        console.log(`[FRONTEND_DISPLAYED_TEXT] transcript_turns=${data.transcript.length}`);
       }
       if (data.state?.active_language) {
         setActiveLanguage(data.state.active_language);
@@ -163,7 +170,7 @@ export default function ActiveCallPage() {
     }
   };
 
-  // Real-Time Browser Microphone Speech Recognition (Multilingual + Barge-In Interruption)
+  // Real-Time Browser Microphone Listener (Debounced Speech Turn Boundary & Input/Output Separated Interruption)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -175,6 +182,8 @@ export default function ActiveCallPage() {
 
     let recognition: any = null;
     let isMounted = true;
+    let silenceTimer: any = null;
+    let accumulatedTurnText = '';
 
     try {
       recognition = new SpeechRecognition();
@@ -183,24 +192,40 @@ export default function ActiveCallPage() {
       recognition.lang = activeLanguage.toLowerCase().includes('hindi') ? 'hi-IN' : 'en-US';
 
       recognition.onresult = (event: any) => {
-        let finalTranscript = '';
+        let currentInterim = '';
+
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
+            accumulatedTurnText += ' ' + event.results[i][0].transcript;
+          } else {
+            currentInterim += event.results[i][0].transcript;
           }
         }
 
-        // Spoken Barge-In Interruption: If caller starts speaking while POLY is speaking
-        if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
-          console.log('Spoken Interruption / Barge-in detected: Canceling POLY voice response.');
-          window.speechSynthesis.cancel();
-          pcmAudioBridge.interruptPlayback();
-          setCallState('thinking');
+        // Input/Output Separated Interruption Evaluation:
+        // Only interrupt if Poly is currently speaking AND caller microphone VAD input level exceeds threshold
+        if (pcmAudioBridge.polyCurrentlySpeaking && pcmAudioBridge.callerInputDetected) {
+          const interrupted = pcmAudioBridge.evaluateBargeIn('Caller speech VAD threshold exceeded during Poly output');
+          if (interrupted) {
+            if (typeof window !== 'undefined' && window.speechSynthesis) {
+              window.speechSynthesis.cancel();
+            }
+            setCallState('thinking');
+          }
         }
 
-        if (finalTranscript.trim() && isMounted && !isProcessing) {
-          console.log('Captured microphone spoken turn:', finalTranscript);
-          handleSendTurn(finalTranscript.trim());
+        // Debounce turn submission: Wait for 800ms of quiet after speech stops before sending complete turn
+        const candidateText = (accumulatedTurnText + ' ' + currentInterim).trim();
+        if (candidateText && isMounted && !isProcessing) {
+          if (silenceTimer) clearTimeout(silenceTimer);
+          silenceTimer = setTimeout(() => {
+            if (accumulatedTurnText.trim() && isMounted && !isProcessing) {
+              const fullTextToSend = accumulatedTurnText.trim();
+              accumulatedTurnText = '';
+              console.log('Debounced complete caller turn boundary:', fullTextToSend);
+              handleSendTurn(fullTextToSend);
+            }
+          }, 800);
         }
       };
 
@@ -217,13 +242,14 @@ export default function ActiveCallPage() {
       };
 
       recognition.start();
-      console.log('Real-Time Microphone Speech Listener active.');
+      console.log('Real-Time Debounced Microphone Listener active.');
     } catch (err) {
       console.warn('Could not initialize SpeechRecognition:', err);
     }
 
     return () => {
       isMounted = false;
+      if (silenceTimer) clearTimeout(silenceTimer);
       if (recognition) {
         try {
           recognition.stop();

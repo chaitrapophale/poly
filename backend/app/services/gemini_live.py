@@ -140,10 +140,23 @@ class GeminiLiveService:
                 model_turn = server_content.model_turn
                 if model_turn:
                     for part in model_turn.parts:
+                        has_text = bool(part.text)
+                        has_audio = bool(part.inline_data)
+                        audio_len = len(part.inline_data.data) if part.inline_data else 0
+                        text_len = len(part.text or "")
+                        
+                        logger.info(
+                            f"[GEMINI_RAW_STREAM] session={self.session_id} "
+                            f"event_type='model_turn' has_text={has_text} text_len={text_len} "
+                            f"has_audio={has_audio} audio_bytes={audio_len} "
+                            f"turn_complete={bool(server_content.turn_complete)} "
+                            f"interrupted={bool(server_content.interrupted)}"
+                        )
+
                         # 1. Real Audio Output (PCM 24kHz)
                         if part.inline_data:
                             self.is_speaking = True
-                            logger.info(f"[OBSERVABILITY - VOICE] GEMINI LIVE -> AI AUDIO ({len(part.inline_data.data)} bytes 24kHz PCM) -> PLAYBACK")
+                            logger.info(f"[OBSERVABILITY - VOICE] GEMINI LIVE -> AI AUDIO ({audio_len} bytes 24kHz PCM) -> PLAYBACK")
                             yield {
                                 "event": "audio_output",
                                 "pcm_bytes": part.inline_data.data,
@@ -173,7 +186,7 @@ class GeminiLiveService:
                     self.is_speaking = False
                     completed_output = self.current_transcript_output
                     self.current_transcript_output = ""
-                    logger.info(f"[OBSERVABILITY - VOICE] TURN COMPLETE -> FINAL AUDIO TEXT: \"{completed_output}\"")
+                    logger.info(f"[OBSERVABILITY - VOICE] TURN COMPLETE -> GEMINI_ASSEMBLED_TEXT: \"{completed_output}\"")
                     yield {
                         "event": "turn_complete",
                         "output_text": completed_output

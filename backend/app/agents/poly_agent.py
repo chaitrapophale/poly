@@ -258,6 +258,23 @@ class PolyAgent:
                     "status": "confirmed"
                 })
 
+    def _clean_response_text(self, text: str) -> str:
+        """Strips structural prompt leaks, markdown headers, and formatting artifacts if emitted."""
+        if not text:
+            return ""
+        cleaned = text.strip()
+        # Remove structural prompt leaks
+        patterns = [
+            r'^---.*?\n',
+            r'^Dialogue History:?\*?\*?',
+            r'^Goal:?\*?\*?.*?\n',
+            r'^Respond as POLY:?',
+            r'^POLY:?'
+        ]
+        for p in patterns:
+            cleaned = re.sub(p, '', cleaned, flags=re.IGNORECASE | re.MULTILINE).strip()
+        return cleaned
+
     def _generate_response(
         self,
         state: Dict[str, Any],
@@ -273,31 +290,28 @@ class PolyAgent:
             for t in transcript[-15:]:
                 speaker = "Caller" if t.get("speaker") == "caller" else "POLY"
                 text = t.get("originalText") or t.get("original_text") or ""
-                if text:
-                    history_turns.append(f"{speaker}: {text}")
+                # Strip previous structural headers if present in history
+                clean_text = self._clean_response_text(text)
+                if clean_text:
+                    history_turns.append(f"{speaker}: {clean_text}")
         history_str = "\n".join(history_turns) if history_turns else f"Caller: {caller_input}"
 
         context_summary = (
-            f"Active Topic/Issue: {state.get('issue') or 'General Inquiry'}\n"
-            f"Active Language: {state.get('active_language')}\n"
-            f"Confirmed Info: {json.dumps(state.get('confirmed_information', []))}\n"
-            f"Uncertain Info: {json.dumps(state.get('uncertain_information', []))}\n"
-            f"Decision State: {decision}"
+            f"Active Topic: {state.get('issue') or 'General Inquiry'}, "
+            f"Language: {state.get('active_language')}, "
+            f"Decision: {decision}"
         )
 
         prompt = (
-            f"{POLY_SYSTEM_INSTRUCTION}\n\n"
-            f"--- CONVERSATION CONTEXT ---\n"
-            f"{context_summary}\n\n"
-            f"--- DIALOGUE HISTORY ---\n"
-            f"{history_str}\n\n"
-            f"Caller's Latest Statement: \"{caller_input}\"\n\n"
-            f"Respond as POLY (speak naturally, empathetically, directly address the caller's latest statement or question in 1-3 concise sentences):"
+            f"Context: {context_summary}\n"
+            f"Conversation History:\n{history_str}\n\n"
+            f"Caller: \"{caller_input}\"\n"
+            f"POLY:"
         )
 
         # STRUCTURED OBSERVABILITY LOGGING
         logger.info(f"[OBSERVABILITY] USER INPUT: \"{caller_input}\"")
-        logger.info(f"[OBSERVABILITY] CONVERSATION CONTEXT:\n{context_summary}")
+        logger.info(f"[OBSERVABILITY] CONVERSATION CONTEXT: {context_summary}")
         logger.info(f"[OBSERVABILITY] GEMINI REQUEST MODEL: {self.model_name}")
 
         if self.client:
@@ -308,11 +322,16 @@ class PolyAgent:
                     response = self.client.models.generate_content(
                         model=self.model_name,
                         contents=prompt,
-                        config=types.GenerateContentConfig(max_output_tokens=150, temperature=0.7)
+                        config=types.GenerateContentConfig(
+                            system_instruction=POLY_SYSTEM_INSTRUCTION,
+                            max_output_tokens=350,
+                            temperature=0.7
+                        )
                     )
                     if response and response.text:
-                        resp_text = response.text.strip()
-                        logger.info(f"[OBSERVABILITY] GEMINI RESPONSE: \"{resp_text}\"")
+                        resp_text = self._clean_response_text(response.text)
+                        logger.info(f"[OBSERVABILITY] GEMINI RAW RESPONSE: \"{response.text}\"")
+                        logger.info(f"[OBSERVABILITY] GEMINI ASSEMBLED RESPONSE: \"{resp_text}\"")
                         logger.info(f"[OBSERVABILITY] FINAL POLY RESPONSE: \"{resp_text}\"")
                         return resp_text
                 except Exception as e:
@@ -322,7 +341,8 @@ class PolyAgent:
 
         # Dynamic Contextual Response Generator for offline/rate-limited environments
         logger.warning("[GEMINI FALLBACK] Gemini API unavailable or rate-limited. Synthesizing context-aware response.")
-        return self._synthesize_contextual_fallback(state, caller_input, decision)
+        raw_fallback = self._synthesize_contextual_fallback(state, caller_input, decision)
+        return self._clean_response_text(raw_fallback)
 
     def _synthesize_contextual_fallback(self, state: Dict[str, Any], caller_input: str, decision: str) -> str:
         """Contextually synthesizes a unique, relevant natural response without any hardcoded ticket trees."""
