@@ -77,6 +77,7 @@ class GeminiLiveService:
         if self.live_session and self.is_connected:
             try:
                 from google.genai import types
+                logger.info(f"[OBSERVABILITY - VOICE] MIC AUDIO (16kHz PCM, {len(pcm_data)} bytes) -> GEMINI LIVE ({self.model_name})")
                 await self.live_session.send(
                     input=types.LiveClientRealtimeInput(
                         media_chunks=[
@@ -97,6 +98,7 @@ class GeminiLiveService:
         if self.live_session and self.is_connected:
             try:
                 from google.genai import types
+                logger.info(f"[OBSERVABILITY - VOICE] TEXT PROMPT -> GEMINI LIVE ({self.model_name}): \"{text}\"")
                 await self.live_session.send(
                     input=types.LiveClientContent(
                         turns=[
@@ -141,6 +143,7 @@ class GeminiLiveService:
                         # 1. Real Audio Output (PCM 24kHz)
                         if part.inline_data:
                             self.is_speaking = True
+                            logger.info(f"[OBSERVABILITY - VOICE] GEMINI LIVE -> AI AUDIO ({len(part.inline_data.data)} bytes 24kHz PCM) -> PLAYBACK")
                             yield {
                                 "event": "audio_output",
                                 "pcm_bytes": part.inline_data.data,
@@ -159,6 +162,7 @@ class GeminiLiveService:
                 # 3. Interruption Event (Caller spoke while Poly was speaking)
                 if server_content.interrupted:
                     self.is_speaking = False
+                    logger.info("[OBSERVABILITY - VOICE] INTERRUPT DETECTED -> GEMINI LIVE BARGE-IN")
                     yield {
                         "event": "interrupted",
                         "reason": "Caller barge-in detected"
@@ -169,6 +173,7 @@ class GeminiLiveService:
                     self.is_speaking = False
                     completed_output = self.current_transcript_output
                     self.current_transcript_output = ""
+                    logger.info(f"[OBSERVABILITY - VOICE] TURN COMPLETE -> FINAL AUDIO TEXT: \"{completed_output}\"")
                     yield {
                         "event": "turn_complete",
                         "output_text": completed_output

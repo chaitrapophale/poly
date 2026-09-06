@@ -235,6 +235,18 @@ class AgoraService {
       console.error('Error stopping Agora session:', err);
     }
   }
+
+  public setMicrophoneMuted(muted: boolean): void {
+    if (this.localMicTrack) {
+      try {
+        this.localMicTrack.setEnabled(!muted);
+        console.log(`Agora Microphone track setEnabled(${!muted})`);
+      } catch (e) {
+        console.warn('Could not set microphone track state:', e);
+      }
+    }
+  }
 }
 
 export const agoraService = new AgoraService();
+

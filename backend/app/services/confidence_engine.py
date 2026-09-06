@@ -59,14 +59,14 @@ class ConfidenceEngine:
 
         # 5. Missing Required Information
         missing_info = state.get("missing_information", [])
-        if len(missing_info) > 0 and not state.get("intent"):
+        if len(missing_info) > 0 and not state.get("intent") and state.get("clarification_attempts", 0) > 1:
             return {
                 "decision": DecisionState.CLARIFY,
-                "reason": "Primary intent and customer ID are missing.",
+                "reason": "Caller issue/intent remains ambiguous after multiple turns.",
                 "confidence_score": 0.7
             }
 
-        # 6. Default Continue
+        # 6. Default Continue — Natural dialogue flow
         return {
             "decision": DecisionState.CONTINUE,
             "reason": "High-confidence conversational progress.",

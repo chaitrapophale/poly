@@ -30,6 +30,7 @@ export default function ActiveCallPage() {
   ]);
   const [userInput, setUserInput] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
 
   // Initialize Agora & Backend Agent Session
   useEffect(() => {
@@ -377,11 +378,17 @@ export default function ActiveCallPage() {
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-surface/90 backdrop-blur-md border-t border-surface-container-high flex items-center justify-center gap-4 z-40">
             <button
               type="button"
-              onClick={() => setCallState(callState === 'listening' ? 'speaking' : 'listening')}
+              onClick={() => {
+                setIsMuted((prev) => {
+                  const next = !prev;
+                  agoraService.setMicrophoneMuted(next);
+                  return next;
+                });
+              }}
               className="w-12 h-12 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center hover:bg-surface-container-highest transition-colors shadow-sm"
               title="Mute / Unmute"
             >
-              <span className="material-symbols-outlined text-[22px]">mic</span>
+              <span className="material-symbols-outlined text-[22px]">{isMuted ? 'mic_off' : 'mic'}</span>
             </button>
 
             <button

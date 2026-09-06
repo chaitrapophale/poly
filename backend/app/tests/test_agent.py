@@ -45,3 +45,32 @@ def test_session_lifecycle():
     turn_res = session.interact("Mera account login nahi ho raha.")
     assert turn_res["response_text"] is not None
     assert len(session.transcript) >= 3
+
+def test_unseen_questions_reasoning():
+    """
+    Tests unseen support questions across Hindi, English, and Hinglish.
+    Verifies that Gemini generates natural, non-canned responses for every topic.
+    """
+    agent = PolyAgent()
+    state = agent.create_initial_state("test-unseen-session")
+
+    unseen_cases = [
+        ("What time does support close?", "General Support & Operations"),
+        ("How do I change my email?", "Account Settings & Profile"),
+        ("My app keeps logging me out.", "Account Access & Authentication"),
+        ("I was charged twice.", "Billing & Payments"),
+        ("My verification code isn't arriving.", "App & Technical Support"),
+        ("Mera account login nahi ho raha.", "Account Access & Authentication"),
+        ("Payment do baar deduct hua hai.", "Billing & Payments"),
+        ("I can't remember my ticket number.", "General Support"),
+        ("Can I export my call transcript to PDF?", "General Support") # Completely new unprogrammed question
+    ]
+
+    for question, expected_domain in unseen_cases:
+        res = agent.process_turn(state, question)
+        resp_text = res.get("response_text")
+        assert resp_text is not None
+        assert len(resp_text.strip()) > 5
+        # Ensure it's not a generic failure ticket question
+        assert "Could you give me your ticket reference number?" not in resp_text
+

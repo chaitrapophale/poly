@@ -50,7 +50,7 @@ class PolySession:
         })
 
         # Poly Agent turn processing
-        agent_result = poly_agent.process_turn(self.state, text)
+        agent_result = poly_agent.process_turn(self.state, text, transcript=self.transcript)
         response_text = agent_result.get("response_text")
 
         # Record Poly response turn if not yielded

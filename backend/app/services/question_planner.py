@@ -1,42 +1,34 @@
 from typing import Dict, Any, List, Optional
 
-CATEGORY_REQUIRED_FIELDS = {
-    "Account Access & Authentication": [
-        {"key": "reference_number", "label": "Reference Number", "priority": 1, "critical": True},
-        {"key": "customer_id", "label": "Customer ID", "priority": 2, "critical": True},
-        {"key": "issue_category", "label": "Issue Category", "priority": 3, "critical": False}
-    ],
-    "Order & Delivery Support": [
-        {"key": "reference_number", "label": "Order Reference Number", "priority": 1, "critical": True},
-        {"key": "customer_name", "label": "Customer Name", "priority": 2, "critical": False},
-        {"key": "issue_description", "label": "Issue Description", "priority": 3, "critical": False}
-    ],
-    "Default": [
-        {"key": "reference_number", "label": "Ticket / Reference Number", "priority": 1, "critical": True},
-        {"key": "issue_category", "label": "Issue Category", "priority": 2, "critical": False}
-    ]
-}
-
 class QuestionPlanner:
     @staticmethod
     def get_next_question_field(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Determines the single highest-priority unanswered or uncertain field to ask the caller about.
+        Determines if there is a specific field needing clarification or confirmation.
+        Returns None to allow natural open-ended conversational dialogue with Gemini.
         """
-        category = state.get("issue") or "Default"
-        fields = CATEGORY_REQUIRED_FIELDS.get(category, CATEGORY_REQUIRED_FIELDS["Default"])
-        
+        uncertain_info = state.get("uncertain_information", [])
         confirmed_keys = [f.get("key") for f in state.get("confirmed_information", [])]
-        uncertain_keys = [f.get("key") for f in state.get("uncertain_information", [])]
 
-        # 1. Prioritize uncertain critical fields needing clarification
-        for field in fields:
-            if field["key"] in uncertain_keys:
-                return field
+        # 1. Prioritize uncertain fields needing clarification (e.g. 4281 vs 4289)
+        if uncertain_info:
+            for item in uncertain_info:
+                return {
+                    "key": item.get("key", "reference_number"),
+                    "label": item.get("label", "Reference Number"),
+                    "priority": 1,
+                    "critical": True
+                }
 
-        # 2. Prioritize unconfirmed missing fields in priority order
-        for field in sorted(fields, key=lambda x: x["priority"]):
-            if field["key"] not in confirmed_keys:
-                return field
+        # 2. Only return missing reference field if caller explicitly mentioned having a ticket or reference
+        if state.get("ticket_mentioned") and "reference_number" not in confirmed_keys:
+            return {
+                "key": "reference_number",
+                "label": "Ticket / Reference Number",
+                "priority": 1,
+                "critical": True
+            }
 
+        # Return None so Gemini Flash handles open-ended support conversation naturally
         return None
+
