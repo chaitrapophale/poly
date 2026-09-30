@@ -38,9 +38,12 @@ class PolyAgent:
         base_model = settings.GEMINI_MODEL or "gemini-3.5-flash"
         self.model_candidates = [
             base_model,
+            "gemini-3.8-flash",
+            "gemini-3.7-flash",
             "gemini-3.6-flash",
-            "gemini-3.1-flash-lite-preview",
-            "gemini-flash-latest"
+            "gemini-3.1-flash-lite",
+            "gemini-flash-latest",
+            "gemini-flash-lite-latest"
         ]
         # Preserve order while removing duplicates
         self.model_candidates = list(dict.fromkeys(self.model_candidates))
